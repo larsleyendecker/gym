@@ -332,8 +332,21 @@ register(
     max_episode_steps=1000,
 )
 
+register(
+    id='Ur5Heg-v0',
+    entry_point='gym.envs.mujoco.ur5_heg_assembly:Ur5HegEnv',
+    max_episode_steps=1000,
+)
+
 # Robotics
 # ----------------------------------------
+
+register(
+    id='Ur5Heg-v1',
+    entry_point='gym.envs.robotics:Ur5HegEnv',
+    max_episode_steps=1000,
+)
+
 
 def _merge(a, b):
     a.update(b)
