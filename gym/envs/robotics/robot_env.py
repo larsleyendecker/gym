@@ -64,6 +64,9 @@ class RobotEnv(gym.GoalEnv):
         obs = self._get_obs()
 
         done = False
+        if self._is_success(obs['achieved_goal'], self.goal):
+            done = True
+
         info = {
             'is_success': self._is_success(obs['achieved_goal'], self.goal),
         }

@@ -10,6 +10,6 @@ initial_qpos = np.array([1.5708, 0, -1.5708, 1.5708, 1.5708, 1.5708])
 class Ur5HegEnv(ur5_env.Ur5Env, utils.EzPickle):
     def __init__(self, reward_type='sparse'):
         ur5_env.Ur5Env.__init__(
-            self, MODEL_XML_PATH, n_substeps=20, distance_threshold=0.05,
+            self, MODEL_XML_PATH, n_substeps=1, distance_threshold=0.05,
             initial_qpos=initial_qpos, reward_type=reward_type)
         utils.EzPickle.__init__(self)
