@@ -3,6 +3,7 @@ import numpy
 import mujoco_py
 import json
 from gym.envs.robotics import rotations, robot_env, utils
+import os
 
 
 def goal_distance(goal_a, goal_b):
@@ -104,7 +105,10 @@ class Ur5Env(robot_env.RobotEnv):
         return True
 
     def _sample_goal(self):
-        with open("/home/marius/DRL_SetBot-RearVentilation/experiment_configs/goal.json", encoding='utf-8') as file:
+        home_path = os.getenv("HOME")
+        goal_path = os.path.join(*[home_path, "DRL_SetBot-RearVentilation", "experiment_configs", "goal.json"])
+
+        with open(goal_path, encoding='utf-8') as file:
             goal = json.load(file)
         return numpy.concatenate([goal['xpos'], goal['xquat']]).copy()
 
