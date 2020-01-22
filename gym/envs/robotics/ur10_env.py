@@ -11,8 +11,8 @@ def goal_distance(goal_a, goal_b):
     return np.linalg.norm(goal_a - goal_b, axis=-1)
 
 
-class Ur5Env(robot_env.RobotEnv):
-    """Superclass for all Ur5 environments.
+class Ur10Env(robot_env.RobotEnv):
+    """Superclass for all Ur10 environments.
     """
 
     def __init__(
@@ -31,7 +31,7 @@ class Ur5Env(robot_env.RobotEnv):
         self.reward_type = reward_type
         self.ctrl_type = ctrl_type
 
-        super(Ur5Env, self).__init__(
+        super(Ur10Env, self).__init__(
             model_path=model_path, n_substeps=n_substeps, n_actions=6,
             initial_qpos=initial_qpos)
 
@@ -107,15 +107,15 @@ class Ur5Env(robot_env.RobotEnv):
         a=0
 
     def _reset_sim(self):
-        qpos = np.array([1.5708, 0, -1.5708, 1.5708, 1.5708, 1.5708])
-        self.sim.data.ctrl[:] = qpos
-        self.set_state(qpos)
-        self.sim.forward()
+        self.sim.set_state(self.initial_state)
+        #self.sim.data.ctrl[:] = qpos
+        #self.set_state(qpos)
+        #self.sim.forward()
         return True
 
     def _sample_goal(self):
         home_path = os.getenv("HOME")
-        goal_path = os.path.join(*[home_path, "DRL_SetBot-RearVentilation", "experiment_configs", "goal.json"])
+        goal_path = os.path.join(*[home_path, "DRL_SetBot-RearVentilation", "experiment_configs", "goal_ur10.json"])
 
         with open(goal_path, encoding='utf-8') as file:
             goal = json.load(file)
@@ -126,11 +126,10 @@ class Ur5Env(robot_env.RobotEnv):
         return (d < self.distance_threshold).astype(np.float32)
 
     def _env_setup(self, initial_qpos):
-        qpos = np.array([1.5708, 0, -1.5708, 1.5708, 1.5708, 1.5708])
-        self.sim.data.ctrl[:] = qpos
-        self.set_state(qpos)
+        self.sim.data.ctrl[:] = initial_qpos
+        self.set_state(initial_qpos)
         self.sim.forward()
 
 
     def render(self, mode='human', width=500, height=500):
-        return super(Ur5Env, self).render(mode, width, height)
+        return super(Ur10Env, self).render(mode, width, height)

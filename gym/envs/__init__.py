@@ -344,9 +344,26 @@ register(
 register(
     id='Ur5Heg-v1',
     entry_point='gym.envs.robotics:Ur5HegEnv',
-    max_episode_steps=1000,
+    max_episode_steps=2500,
 )
 
+register(
+    id='Ur5Heg-v2',
+    entry_point='gym.envs.robotics:Ur5HegCartEnv',
+    max_episode_steps=2500,
+)
+
+register(
+    id='Ur10Heg-v1',
+    entry_point='gym.envs.robotics:Ur10HegEnv',
+    max_episode_steps=2500,
+)
+
+register(
+    id='Ur10Heg-v2',
+    entry_point='gym.envs.robotics:Ur10HegCartEnv',
+    max_episode_steps=2500,
+)
 
 def _merge(a, b):
     a.update(b)

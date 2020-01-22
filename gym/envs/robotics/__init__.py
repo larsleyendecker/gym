@@ -12,4 +12,9 @@ from gym.envs.robotics.hand.manipulate import HandPenEnv
 from gym.envs.robotics.hand.manipulate_touch_sensors import HandBlockTouchSensorsEnv
 from gym.envs.robotics.hand.manipulate_touch_sensors import HandEggTouchSensorsEnv
 from gym.envs.robotics.hand.manipulate_touch_sensors import HandPenTouchSensorsEnv
+
 from gym.envs.robotics.ur5.assemble import Ur5HegEnv
+from gym.envs.robotics.ur5.assemble import Ur5HegCartEnv
+
+from gym.envs.robotics.ur10.assemble import Ur10HegEnv
+from gym.envs.robotics.ur10.assemble import Ur10HegCartEnv
