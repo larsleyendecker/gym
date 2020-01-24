@@ -47,7 +47,8 @@ class Ur10Env(robot_env.RobotEnv):
             reward = -(d > self.distance_threshold).astype(np.float32)
             if (d > self.fail_threshold).astype(np.float32):
                 # -8000+2n_t  ... sim.get_state()[0]/0.0005 = n_substeps * n_t
-                reward = -8000 + numpy.round(self.sim.get_state()[0]/0.0005).astype('int')
+             #   reward = -8000 + numpy.round(self.sim.get_state()[0]/0.0005).astype('int')
+                reward=-50
             return reward
         else:
             return -d
@@ -134,7 +135,7 @@ class Ur10Env(robot_env.RobotEnv):
 
     def _is_failure(self, achieved_goal, desired_goal):
         d = goal_distance(achieved_goal, desired_goal)
-        return (d > self.fail_threshold).astype(np.float32)
+        return false
 
     def _env_setup(self, initial_qpos):
         self.sim.data.ctrl[:] = initial_qpos
