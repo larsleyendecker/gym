@@ -66,7 +66,8 @@ class RobotEnv(gym.GoalEnv):
         done = False
         if self._is_success(obs['achieved_goal'], self.goal):
             done = True
-
+        if self._is_failure(obs['achieved_goal'], self.goal):
+            done = True
         info = {
             'is_success': self._is_success(obs['achieved_goal'], self.goal),
         }
@@ -139,6 +140,11 @@ class RobotEnv(gym.GoalEnv):
         raise NotImplementedError()
 
     def _is_success(self, achieved_goal, desired_goal):
+        """Indicates whether or not the achieved goal successfully achieved the desired goal.
+        """
+        raise NotImplementedError()
+
+    def _is_failure(self, achieved_goal, desired_goal):
         """Indicates whether or not the achieved goal successfully achieved the desired goal.
         """
         raise NotImplementedError()

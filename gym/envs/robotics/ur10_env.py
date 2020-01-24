@@ -16,7 +16,8 @@ class Ur10Env(robot_env.RobotEnv):
     """
 
     def __init__(
-        self, model_path, n_substeps, distance_threshold, initial_qpos, reward_type, ctrl_type="joint"
+        self, model_path, n_substeps, distance_threshold, initial_qpos, reward_type, ctrl_type="joint",
+            fail_threshold=0.3
     ):
         """Initializes a new Fetch environment.
 
@@ -30,6 +31,7 @@ class Ur10Env(robot_env.RobotEnv):
         self.distance_threshold = distance_threshold
         self.reward_type = reward_type
         self.ctrl_type = ctrl_type
+        self.fail_threshold = fail_threshold
 
         super(Ur10Env, self).__init__(
             model_path=model_path, n_substeps=n_substeps, n_actions=6,
@@ -42,7 +44,11 @@ class Ur10Env(robot_env.RobotEnv):
         # Compute distance between goal and the achieved goal.
         d = goal_distance(achieved_goal, goal)
         if self.reward_type == 'sparse':
-            return -(d > self.distance_threshold).astype(np.float32)
+            reward = -(d > self.distance_threshold).astype(np.float32)
+            if (d > self.fail_threshold).astype(np.float32):
+                # -8000+2n_t  ... sim.get_state()[0]/0.0005 = n_substeps * n_t
+                reward = -8000 + numpy.round(self.sim.get_state()[0]/0.0005).astype('int')
+            return reward
         else:
             return -d
 
@@ -69,10 +75,11 @@ class Ur10Env(robot_env.RobotEnv):
             utils.ctrl_set_action(self.sim, action)
         elif self.ctrl_type == "cartesian":
             dx = action.reshape(6, 1)
+            #print(dx)
             jacp = self.sim.data.get_body_jacp(name="gripper_dummy_heg").reshape(3, 6)
             jacr = self.sim.data.get_body_jacr(name="gripper_dummy_heg").reshape(3, 6)
             jac = numpy.vstack((jacp, jacr))
-            dq = 0.00001*numpy.linalg.lstsq(jac, dx)[0].reshape(6, )
+            dq = 0.01*numpy.linalg.lstsq(jac, dx)[0].reshape(6, )
             # print(sum(abs(sim.data.qpos-sim.data.ctrl)))
             utils.ctrl_set_action(self.sim, dq)
 
@@ -124,6 +131,10 @@ class Ur10Env(robot_env.RobotEnv):
     def _is_success(self, achieved_goal, desired_goal):
         d = goal_distance(achieved_goal, desired_goal)
         return (d < self.distance_threshold).astype(np.float32)
+
+    def _is_failure(self, achieved_goal, desired_goal):
+        d = goal_distance(achieved_goal, desired_goal)
+        return (d > self.fail_threshold).astype(np.float32)
 
     def _env_setup(self, initial_qpos):
         self.sim.data.ctrl[:] = initial_qpos

@@ -356,13 +356,13 @@ register(
 register(
     id='Ur10Heg-v1',
     entry_point='gym.envs.robotics:Ur10HegEnv',
-    max_episode_steps=2500,
+    max_episode_steps=4000,
 )
 
 register(
     id='Ur10Heg-v2',
     entry_point='gym.envs.robotics:Ur10HegCartEnv',
-    max_episode_steps=2500,
+    max_episode_steps=4000,
 )
 
 def _merge(a, b):

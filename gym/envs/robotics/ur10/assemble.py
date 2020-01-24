@@ -14,13 +14,13 @@ initial_qpos = numpy.array([1.5708, -1.3, 2.1, -0.80, 1.5708, 3.14159])
 class Ur10HegEnv(ur10_env.Ur10Env, utils.EzPickle):
     def __init__(self, reward_type='sparse'):
         ur10_env.Ur10Env.__init__(
-            self, MODEL_XML_PATH, n_substeps=1, distance_threshold=0.05,
+            self, MODEL_XML_PATH, n_substeps=2, distance_threshold=0.035,
             initial_qpos=initial_qpos, reward_type=reward_type)
         utils.EzPickle.__init__(self)
 
 class Ur10HegCartEnv(ur10_env.Ur10Env, utils.EzPickle):
     def __init__(self, reward_type='sparse'):
         ur10_env.Ur10Env.__init__(
-            self, MODEL_XML_PATH, n_substeps=1, distance_threshold=0.05,
+            self, MODEL_XML_PATH, n_substeps=2, distance_threshold=0.035,
             initial_qpos=initial_qpos, reward_type=reward_type, ctrl_type='cartesian')
         utils.EzPickle.__init__(self)
