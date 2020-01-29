@@ -138,7 +138,7 @@ class Ur10Env(robot_env.RobotEnv):
     def _is_failure(self, achieved_goal, desired_goal):
         d = goal_distance(achieved_goal, desired_goal)
         #return (d > self.fail_threshold) & (numpy.round(self.sim.get_state()[0]/0.0005).astype('int') > 200) # removed early stop because baselines did not work with it
-        return false
+        return False
 
     def _env_setup(self, initial_qpos):
         self.sim.data.ctrl[:] = initial_qpos
