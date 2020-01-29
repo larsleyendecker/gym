@@ -45,10 +45,9 @@ class Ur10Env(robot_env.RobotEnv):
         d = goal_distance(achieved_goal, goal)
         if self.reward_type == 'sparse':
             reward = -(d > self.distance_threshold).astype(np.float32)
-            # if (d > self.fail_threshold).astype(np.float32):
-                # -8000+2n_t  ... sim.get_state()[0]/0.0005 = n_substeps * n_t
-             #   reward = -8000 + numpy.round(self.sim.get_state()[0]/0.0005).astype('int')
-             #   reward=-50
+            if (d > self.fail_threshold).astype(np.float32):
+                 #-8000+2n_t  ... sim.get_state()[0]/0.0005 = n_substeps * n_t
+                reward = -8000 + numpy.round(self.sim.get_state()[0]/0.0005).astype('int')
             return reward
         else:
             return -d
@@ -75,7 +74,8 @@ class Ur10Env(robot_env.RobotEnv):
             # Apply action to simulation.
             utils.ctrl_set_action(self.sim, action)
         elif self.ctrl_type == "cartesian":
-            dx = action.reshape(6, 1)
+            dx = (action + numpy.array([0, 0, 0, 0, 0, 0])).reshape(6, 1)
+            dx[1] = 0.2
             #print(dx)
             jacp = self.sim.data.get_body_jacp(name="gripper_dummy_heg").reshape(3, 6)
             jacr = self.sim.data.get_body_jacr(name="gripper_dummy_heg").reshape(3, 6)
@@ -131,11 +131,13 @@ class Ur10Env(robot_env.RobotEnv):
 
     def _is_success(self, achieved_goal, desired_goal):
         d = goal_distance(achieved_goal, desired_goal)
-        return (d < self.distance_threshold).astype(np.float32)
+        if (d < self.distance_threshold).astype(np.float32):
+            print('Success!')
+            return (d < self.distance_threshold).astype(np.float32)
 
     def _is_failure(self, achieved_goal, desired_goal):
-        # d = goal_distance(achieved_goal, desired_goal)
-        return False  # removed early stop because baselines did not work with it
+        d = goal_distance(achieved_goal, desired_goal)
+        return (d > self.fail_threshold) & (numpy.round(self.sim.get_state()[0]/0.0005).astype('int') > 200) # removed early stop because baselines did not work with it
 
     def _env_setup(self, initial_qpos):
         self.sim.data.ctrl[:] = initial_qpos
