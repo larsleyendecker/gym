@@ -44,11 +44,10 @@ class Ur10Env(robot_env.RobotEnv):
         # Compute distance between goal and the achieved goal.
         d = goal_distance(achieved_goal, goal)
         if self.reward_type == 'sparse':
-            reward = -(d > self.distance_threshold).astype(np.float32)
             #if (d > self.fail_threshold).astype(np.float32):
             #     #-8000+2n_t  ... sim.get_state()[0]/0.0005 = n_substeps * n_t
             #    reward = -8000 + numpy.round(self.sim.get_state()[0]/0.0005).astype('int')
-            return reward
+            return -(d > self.distance_threshold).astype(np.float32)
         else:
             return -d
 
@@ -133,7 +132,7 @@ class Ur10Env(robot_env.RobotEnv):
         d = goal_distance(achieved_goal, desired_goal)
         if (d < self.distance_threshold).astype(np.float32):
             print('Success!')
-            return (d < self.distance_threshold).astype(np.float32)
+        return (d < self.distance_threshold).astype(np.float32)
 
     def _is_failure(self, achieved_goal, desired_goal):
         d = goal_distance(achieved_goal, desired_goal)
