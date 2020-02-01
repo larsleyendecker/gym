@@ -123,6 +123,7 @@ class Ur5Env(robot_env.RobotEnv):
 
     def _is_success(self, achieved_goal, desired_goal):
         d = goal_distance(achieved_goal, desired_goal)
+        print((d < self.distance_threshold).astype(np.float32))
         return (d < self.distance_threshold).astype(np.float32)
 
     def _env_setup(self, initial_qpos):

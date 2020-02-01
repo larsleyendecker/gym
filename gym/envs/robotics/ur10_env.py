@@ -4,7 +4,7 @@ import mujoco_py
 import json
 from gym.envs.robotics import rotations, robot_env, utils
 import os
-
+import matplotlib.pyplot as plt
 
 def goal_distance(goal_a, goal_b):
     assert goal_a.shape == goal_b.shape
@@ -17,7 +17,7 @@ class Ur10Env(robot_env.RobotEnv):
 
     def __init__(
         self, model_path, n_substeps, distance_threshold, initial_qpos, reward_type, ctrl_type="joint",
-            fail_threshold=0.3
+            fail_threshold=0.25
     ):
         """Initializes a new Fetch environment.
 
@@ -43,11 +43,12 @@ class Ur10Env(robot_env.RobotEnv):
     def compute_reward(self, achieved_goal, goal, info):
         # Compute distance between goal and the achieved goal.
         d = goal_distance(achieved_goal, goal)
+        #print(d)
         if self.reward_type == 'sparse':
             #if (d > self.fail_threshold).astype(np.float32):
             #     #-8000+2n_t  ... sim.get_state()[0]/0.0005 = n_substeps * n_t
             #    reward = -8000 + numpy.round(self.sim.get_state()[0]/0.0005).astype('int')
-            return -(d > self.distance_threshold).astype(np.float32)
+            return -(d > self.distance_threshold).astype(np.float32) - 10*(d > self.fail_threshold).astype(np.float)
         else:
             return -d
 
@@ -73,15 +74,41 @@ class Ur10Env(robot_env.RobotEnv):
             # Apply action to simulation.
             utils.ctrl_set_action(self.sim, action)
         elif self.ctrl_type == "cartesian":
-            dx = (action + numpy.array([0, 0, 0, 0, 0, 0])).reshape(6, 1)
-            dx[1] = 0.2
-            #print(dx)
+            dx = action.reshape(6, )
+
+            # limitation of operation space, we only allow small rotations adjustments in x and z directions, moving in y direction
+            x_now = numpy.concatenate((self.sim.data.get_body_xpos("gripper_dummy_heg"), self.sim.data.get_body_xquat("gripper_dummy_heg")))
+            x_then = x_now[:3] + dx[:3]*0.01
+
+            #diff_now = numpy.array(x_now - self.init_x).reshape(7,)
+            diff_then = numpy.array(x_then[:3] - self.init_x[:3])
+
+            barriers_min = numpy.array([-0.1, -0.05,   -0.1])
+            barriers_max = numpy.array([0.1,  0.2, 0.1])
+
+            for i in range(3):
+                if (barriers_min[i] < diff_then[i] < barriers_max[i]):
+                    dx[i] = dx[i] * 0.01
+                elif barriers_min[i] > diff_then[i]:
+                    dx[i] = + 0.01
+                elif barriers_max[i] < diff_then[i]:
+                    dx[i] = - 0.01
+
+
+
+            for i in range(3,6):
+                dx[i] = dx[i] * 0.0001
+
+            dx[2] += 0.008
+            dx.reshape(6, 1)
+
             jacp = self.sim.data.get_body_jacp(name="gripper_dummy_heg").reshape(3, 6)
             jacr = self.sim.data.get_body_jacr(name="gripper_dummy_heg").reshape(3, 6)
             jac = numpy.vstack((jacp, jacr))
-            dq = 0.01*numpy.linalg.lstsq(jac, dx)[0].reshape(6, )
+            dq = numpy.linalg.lstsq(jac, dx)[0].reshape(6, )
             # print(sum(abs(sim.data.qpos-sim.data.ctrl)))
             utils.ctrl_set_action(self.sim, dq)
+
 
     def _get_obs(self):
         # positions
@@ -115,6 +142,8 @@ class Ur10Env(robot_env.RobotEnv):
 
     def _reset_sim(self):
         self.sim.set_state(self.initial_state)
+        self.sim.forward()
+        self.init_x = numpy.concatenate((self.sim.data.get_body_xpos("gripper_dummy_heg"), self.sim.data.get_body_xquat("gripper_dummy_heg")))
         #self.sim.data.ctrl[:] = qpos
         #self.set_state(qpos)
         #self.sim.forward()
