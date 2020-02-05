@@ -159,8 +159,6 @@ class Ur10Env(robot_env.RobotEnv):
 
     def _is_success(self, achieved_goal, desired_goal):
         d = goal_distance(achieved_goal, desired_goal)
-        if (d < self.distance_threshold).astype(np.float32):
-            print('Success!')
         return (d < self.distance_threshold).astype(np.float32)
 
     def _is_failure(self, achieved_goal, desired_goal):
