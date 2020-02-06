@@ -2,16 +2,18 @@ import numpy as np
 import numpy
 import mujoco_py
 import json
-from gym.envs.robotics import rotations, robot_env, utils
+from gym.envs.robotics import rotations, robot_custom_env, utils
 import os
 import matplotlib.pyplot as plt
 
+def goal_distance(obs, goal):
+    obs = obs[:6]
+    assert obs.shape == goal.shape
+    return np.linalg.norm(obs - goal, axis=-1)
 
-def goal_distance(goal_a, goal_b):
-    assert goal_a.shape == goal_b.shape
-    return np.linalg.norm(goal_a - goal_b, axis=-1)
 
-class Ur10Env(robot_env.RobotEnv):
+
+class Ur10Env(robot_custom_env.RobotEnv):
     """Superclass for all Ur10 environments.
     """
 
@@ -40,9 +42,9 @@ class Ur10Env(robot_env.RobotEnv):
     # GoalEnv methods
     # ----------------------------
 
-    def compute_reward(self, achieved_goal, goal, info):
+    def compute_reward(self, obs, goal, info):
         # Compute distance between goal and the achieved goal.
-        d = goal_distance(achieved_goal, goal)
+        d = goal_distance(obs, goal)
         #print(d)
         if self.reward_type == 'sparse':
             #if (d > self.fail_threshold).astype(np.float32):
@@ -88,18 +90,18 @@ class Ur10Env(robot_env.RobotEnv):
 
             for i in range(3):
                 if (barriers_min[i] < diff_then[i] < barriers_max[i]):
-                    dx[i] = dx[i] * 0.005
+                    dx[i] = dx[i] * 0.01
                 elif barriers_min[i] > diff_then[i]:
-                    dx[i] = + 0.005
+                    dx[i] = + 0.01
                 elif barriers_max[i] < diff_then[i]:
-                    dx[i] = - 0.005
+                    dx[i] = - 0.01
 
 
 
             for i in range(3,6):
                 dx[i] = dx[i] * 0.0001
 
-            dx[2] += 0.003
+            dx[2] += 0.008
             dx.reshape(6, 1)
 
             jacp = self.sim.data.get_body_jacp(name="gripper_dummy_heg").reshape(3, 6)
@@ -115,18 +117,20 @@ class Ur10Env(robot_env.RobotEnv):
         force = self.sim.data.sensordata
         x_pos = self.sim.data.get_body_xpos("gripper_dummy_heg")
         x_quat = self.sim.data.get_body_xquat("gripper_dummy_heg")
-        q_pos = self.sim.data.qpos
+        rpy = rotations.quat2euler(x_quat)
 
         obs = np.concatenate([
-            x_pos, x_quat, q_pos, force
+            x_pos-self.goal[:3], rpy-self.goal[3:], force
         ])
 
+        return obs
+        '''
         return {
             'observation': obs.copy(),
             'achieved_goal': np.concatenate([x_pos, rpy]).copy(),
             'desired_goal': self.goal.copy(),
         }
-
+        '''
 
     def _viewer_setup(self):
         body_id = self.sim.model.body_name2id('body_link')
@@ -150,15 +154,16 @@ class Ur10Env(robot_env.RobotEnv):
         #self.sim.forward()
         return True
 
-
     def _sample_goal(self):
         home_path = os.getenv("HOME")
         goal_path = os.path.join(*[home_path, "DRL_SetBot-RearVentilation", "experiment_configs", "goal_ur10.json"])
 
         with open(goal_path, encoding='utf-8') as file:
             goal = json.load(file)
-        return numpy.concatenate([goal['xpos'], goal['xquat']]).copy()
-
+            xpos =  goal['xpos']
+            xquat = goal['xquat']
+            rpy = rotations.quat2euler(xquat)
+        return numpy.concatenate([xpos, rpy]).copy()
 
     def _is_success(self, achieved_goal, desired_goal):
         d = goal_distance(achieved_goal, desired_goal)
@@ -166,7 +171,8 @@ class Ur10Env(robot_env.RobotEnv):
 
     def _is_failure(self, achieved_goal, desired_goal):
         d = goal_distance(achieved_goal, desired_goal)
-        return (d > self.fail_threshold) & (numpy.round(self.sim.get_state()[0]/0.0005).astype('int') > 200) # removed early stop because baselines did not work with it
+        #return (d > self.fail_threshold) & (numpy.round(self.sim.get_state()[0]/0.0005).astype('int') > 200) # removed early stop because baselines did not work with it
+        return False
 
     def _env_setup(self, initial_qpos):
         self.sim.data.ctrl[:] = initial_qpos

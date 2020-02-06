@@ -13,7 +13,26 @@ except ImportError as e:
 
 DEFAULT_SIZE = 500
 
-class RobotEnv(gym.GoalEnv):
+
+def convert_observation_to_space(observation):
+    if isinstance(observation, dict):
+        space = spaces.Dict(OrderedDict([
+            (key, convert_observation_to_space(value))
+            for key, value in observation.items()
+        ]))
+    elif isinstance(observation, np.ndarray):
+        low = np.full(observation.shape, -float('inf'))
+        high = np.full(observation.shape, float('inf'))
+        space = spaces.Box(low, high, dtype=observation.dtype)
+    else:
+        raise NotImplementedError(type(observation), observation)
+
+    return space
+
+
+
+
+class RobotEnv(gym.Env):
     def __init__(self, model_path, initial_qpos, n_actions, n_substeps):
         if model_path.startswith('/'):
             fullpath = model_path
@@ -39,12 +58,15 @@ class RobotEnv(gym.GoalEnv):
         self.goal = self._sample_goal()
         obs = self._get_obs()
         self.action_space = spaces.Box(-1., 1., shape=(n_actions,), dtype='float32')
+
+        self.observation_space = convert_observation_to_space(np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]))
+        '''
         self.observation_space = spaces.Dict(dict(
             desired_goal=spaces.Box(-np.inf, np.inf, shape=obs['achieved_goal'].shape, dtype='float32'),
             achieved_goal=spaces.Box(-np.inf, np.inf, shape=obs['achieved_goal'].shape, dtype='float32'),
             observation=spaces.Box(-np.inf, np.inf, shape=obs['observation'].shape, dtype='float32'),
         ))
-
+        '''
     @property
     def dt(self):
         return self.sim.model.opt.timestep * self.sim.nsubsteps
@@ -63,14 +85,17 @@ class RobotEnv(gym.GoalEnv):
         self._step_callback()
         obs = self._get_obs()
 
+
         done = False
 
-        #if self._is_success(obs['achieved_goal'], self.goal):
-            #done = True
         info = {
-            'is_success': self._is_success(obs['achieved_goal'], self.goal),
+            'is_success': self._is_success(obs, self.goal),
         }
-        reward = self.compute_reward(obs['achieved_goal'], self.goal, info)
+        reward = self.compute_reward(obs, self.goal, info)
+
+        if self._is_success(obs, self.goal):
+            done = True
+            reward += 1000
         return obs, reward, done, info
 
     def reset(self):
@@ -79,7 +104,7 @@ class RobotEnv(gym.GoalEnv):
         # Gimbel lock) or we may not achieve an initial condition (e.g. an object is within the hand).
         # In this case, we just keep randomizing until we eventually achieve a valid initial
         # configuration.
-        super(RobotEnv, self).reset()
+        #super(RobotEnv, self).reset()
         did_reset_sim = False
         while not did_reset_sim:
             did_reset_sim = self._reset_sim()
