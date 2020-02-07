@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 def goal_distance(obs, goal):
     obs = obs[:6]
     assert obs.shape == goal.shape
-    return np.linalg.norm(obs - goal, axis=-1)
+    return np.linalg.norm(obs*np.array([1, 1, 1, 0.3, 0.3, 0.3]), axis=-1)
 
 
 

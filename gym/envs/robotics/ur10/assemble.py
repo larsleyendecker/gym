@@ -30,6 +30,6 @@ class Ur10HegSparseEnv(ur10_env.Ur10Env, utils.EzPickle):
 class Ur10HegRelEnv(ur10_rel_env.Ur10Env, utils.EzPickle):
     def __init__(self, reward_type='dense'):
         ur10_rel_env.Ur10Env.__init__(
-            self, MODEL_XML_PATH, n_substeps=2, distance_threshold=0.01,
+            self, MODEL_XML_PATH, n_substeps=2, distance_threshold=0.015,
             initial_qpos=initial_qpos, reward_type=reward_type, ctrl_type='cartesian')
         utils.EzPickle.__init__(self)
