@@ -95,7 +95,7 @@ class RobotEnv(gym.Env):
 
         if self._is_success(obs, self.goal):
             done = True
-            reward += 1000
+            reward += 4000
         return obs, reward, done, info
 
     def reset(self):
