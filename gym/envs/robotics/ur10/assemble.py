@@ -11,6 +11,8 @@ import os
 # Ensure we get the path separator correct on windows
 HOME_PATH = os.getenv("HOME")
 MODEL_XML_PATH = os.path.join(*[HOME_PATH, "DRL_SetBot-RearVentilation", "UR10", "ur10_heg.xml"])
+MODEL_XML_PATH_SLOW = os.path.join(*[HOME_PATH, "DRL_SetBot-RearVentilation", "UR10", "ur10_heg_slow.xml"])
+
 initial_qpos = numpy.array([1.5708, -1.3, 2.1, -0.80, 1.5708, 3.14159])
 
 class Ur10HegEnv(ur10_env.Ur10Env, utils.EzPickle):
@@ -30,6 +32,6 @@ class Ur10HegSparseEnv(ur10_env.Ur10Env, utils.EzPickle):
 class Ur10HegRelEnv(ur10_rel_env.Ur10Env, utils.EzPickle):
     def __init__(self, reward_type='dense'):
         ur10_rel_env.Ur10Env.__init__(
-            self, MODEL_XML_PATH, n_substeps=2, distance_threshold=0.015,
+            self, MODEL_XML_PATH_SLOW, n_substeps=10, distance_threshold=0.02,
             initial_qpos=initial_qpos, reward_type=reward_type, ctrl_type='cartesian')
         utils.EzPickle.__init__(self)
