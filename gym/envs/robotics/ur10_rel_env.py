@@ -78,9 +78,10 @@ class Ur10Env(robot_custom_env.RobotEnv):
         elif self.ctrl_type == "cartesian":
             dx = action.reshape(6, )
 
+            max_limit = 0.00005
             # limitation of operation space, we only allow small rotations adjustments in x and z directions, moving in y direction
             x_now = numpy.concatenate((self.sim.data.get_body_xpos("gripper_dummy_heg"), self.sim.data.get_body_xquat("gripper_dummy_heg")))
-            x_then = x_now[:3] + dx[:3]*0.01
+            x_then = x_now[:3] + dx[:3]*max_limit
 
             #diff_now = numpy.array(x_now - self.init_x).reshape(7,)
             diff_then = numpy.array(x_then[:3] - self.init_x[:3])
@@ -90,18 +91,18 @@ class Ur10Env(robot_custom_env.RobotEnv):
 
             for i in range(3):
                 if (barriers_min[i] < diff_then[i] < barriers_max[i]):
-                    dx[i] = dx[i] * 0.01
+                    dx[i] = dx[i] * max_limit
                 elif barriers_min[i] > diff_then[i]:
-                    dx[i] = + 0.01
+                    dx[i] = + max_limit
                 elif barriers_max[i] < diff_then[i]:
-                    dx[i] = - 0.01
+                    dx[i] = - max_limit
 
 
 
             for i in range(3,6):
-                dx[i] = dx[i] * 0.0001
+                dx[i] = dx[i] * max_limit * 0.01 #slower rotations
 
-            dx[2] += 0.008
+            # dx[1] += 0.5*max_limit #bias in direction of assembly
             dx.reshape(6, 1)
 
             jacp = self.sim.data.get_body_jacp(name="gripper_dummy_heg").reshape(3, 6)
@@ -109,7 +110,8 @@ class Ur10Env(robot_custom_env.RobotEnv):
             jac = numpy.vstack((jacp, jacr))
             dq = numpy.linalg.lstsq(jac, dx)[0].reshape(6, )
             # print(sum(abs(sim.data.qpos-sim.data.ctrl)))
-            utils.ctrl_set_action(self.sim, dq)
+            for i in range(6):
+                self.sim.data.ctrl[i] += dq[i]
 
 
     def _get_obs(self):
@@ -149,7 +151,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.sim.set_state(self.initial_state)
         self.sim.forward()
         self.init_x = numpy.concatenate((self.sim.data.get_body_xpos("gripper_dummy_heg"), self.sim.data.get_body_xquat("gripper_dummy_heg")))
-        #self.sim.data.ctrl[:] = qpos
+        self.sim.data.ctrl[:] = self.initial_state[1]
         #self.set_state(qpos)
         #self.sim.forward()
         return True
