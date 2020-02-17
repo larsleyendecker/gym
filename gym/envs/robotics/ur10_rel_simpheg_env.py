@@ -158,7 +158,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
 
     def _sample_goal(self):
         home_path = os.getenv("HOME")
-        goal_path = os.path.join(*[home_path, "DRL_SetBot-RearVentilation", "experiment_configs", "goal_ur10_simpheg.json"])
+        goal_path = os.path.join(*[home_path, "DRL_SetBot-RearVentilation", "experiment_configs", "goal_ur10_simpheg_conf2.json"])
 
         with open(goal_path, encoding='utf-8') as file:
             goal = json.load(file)
