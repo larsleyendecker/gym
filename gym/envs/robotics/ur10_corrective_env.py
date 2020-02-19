@@ -27,7 +27,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
 
     def __init__(
         self, model_path, n_substeps, distance_threshold, initial_qpos, reward_type, ctrl_type="joint",
-            fail_threshold=0.25
+            fail_threshold=0.25, vary=False
     ):
         """Initializes a new Fetch environment.
 
@@ -42,7 +42,8 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.reward_type = reward_type
         self.ctrl_type = ctrl_type
         self.fail_threshold = fail_threshold
-
+        self.vary = vary
+        self.initial_qpos = initial_qpos
         super(Ur10Env, self).__init__(
             model_path=model_path, n_substeps=n_substeps, n_actions=6,
             initial_qpos=initial_qpos)
@@ -82,8 +83,8 @@ class Ur10Env(robot_custom_env.RobotEnv):
 
         deviation = sum(abs(self.sim.data.qpos - self.sim.data.ctrl))
         # print(deviation )
-        if  deviation > 0.5:  # reset control to current position if deviation too high
-            self.sim.data.ctrl[:] = self.sim.data.qpos
+        if  deviation > 0.35:  # reset control to current position if deviation too high
+            self.sim.data.ctrl[:] = self.sim.data.qpos + self.get_dq([0, 0, 0.005, 0, 0, 0])
             print('deviation compensated')
 
         if self.ctrl_type == "joint":
@@ -93,7 +94,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
         elif self.ctrl_type == "cartesian":
             dx = action.reshape(6, )
 
-            max_limit = 0.00005
+            max_limit = 0.00005*20
             # limitation of operation space, we only allow small rotations adjustments in x and z directions, moving in y direction
             x_now = numpy.concatenate((self.sim.data.get_body_xpos("gripper_dummy_heg"), self.sim.data.get_body_xquat("gripper_dummy_heg")))
             x_then = x_now[:3] + dx[:3]*max_limit
@@ -122,7 +123,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
             bias_dir = -self.last_obs[:6]
             # print(bias_dir)
             for i in range(3,6):
-                if bias_dir[i]>0.5:
+                if bias_dir[i] > 0.5:
                     print(i, bias_dir[i])
                 bias_dir[i] = bias_dir[i] * 0.01 #slower rotations
             bias_dir /= np.linalg.norm(bias_dir)
@@ -130,13 +131,17 @@ class Ur10Env(robot_custom_env.RobotEnv):
             dx += bias_dir * max_limit * 0.8 * 2.45  #2.45 is the maximum norm of the action vector
             dx.reshape(6, 1)
 
-            jacp = self.sim.data.get_body_jacp(name="gripper_dummy_heg").reshape(3, 6)
-            jacr = self.sim.data.get_body_jacr(name="gripper_dummy_heg").reshape(3, 6)
-            jac = numpy.vstack((jacp, jacr))
-            dq = numpy.linalg.lstsq(jac, dx)[0].reshape(6, )
+            dq = self.get_dq(dx)
             # print(sum(abs(sim.data.qpos-sim.data.ctrl)))
             for i in range(6):
                 self.sim.data.ctrl[i] += dq[i]
+
+    def get_dq(self, dx):
+        jacp = self.sim.data.get_body_jacp(name="gripper_dummy_heg").reshape(3, 6)
+        jacr = self.sim.data.get_body_jacr(name="gripper_dummy_heg").reshape(3, 6)
+        jac = numpy.vstack((jacp, jacr))
+        dq = numpy.linalg.lstsq(jac, dx)[0].reshape(6, )
+        return dq
 
 
     def _get_obs(self):
@@ -175,11 +180,15 @@ class Ur10Env(robot_custom_env.RobotEnv):
         a=0
 
     def _reset_sim(self):
-        self.sim.set_state(self.initial_state)
+        if self.vary == True:
+            deviation_x = numpy.concatenate((numpy.random.normal(loc=0.0, scale=1.0, size=(3,)), [0, 0, 0]))  # deviation in x,y,z, direction rotation stays the same
+            deviation_q = self.get_dq(deviation_x * 0.005)
+        else:
+            deviation_q = numpy.array([0, 0, 0, 0, 0, 0])
+        self.set_state(self.initial_qpos + deviation_q)
         self.sim.forward()
         self.init_x = numpy.concatenate((self.sim.data.get_body_xpos("gripper_dummy_heg"), self.sim.data.get_body_xquat("gripper_dummy_heg")))
-        self.sim.data.ctrl[:] = self.initial_state[1]
-
+        self.sim.data.ctrl[:] = self.initial_qpos + deviation_q
         #self.set_state(qpos)
         #self.sim.forward()
         return True

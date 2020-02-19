@@ -102,7 +102,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
             for i in range(3,6):
                 dx[i] = dx[i] * max_limit * 0.01 #slower rotations
 
-            dx[1] += 0.2*max_limit #bias in direction of assembly
+            #dx[1] += 0.2*max_limit #bias in direction of assembly
             dx.reshape(6, 1)
 
             jacp = self.sim.data.get_body_jacp(name="gripper_dummy_heg").reshape(3, 6)

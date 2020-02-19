@@ -374,13 +374,19 @@ register(
 register(
     id='Ur10Heg-v4',
     entry_point = 'gym.envs.robotics:Ur10HegSHRelEnv',
-    max_episode_steps = 4000,
+    max_episode_steps = 200,
 )
 
 register(
     id='Ur10Heg-v5',
     entry_point = 'gym.envs.robotics:Ur10HegCorrectiveEnv',
-    max_episode_steps = 4000,
+    max_episode_steps = 200,
+)
+
+register(
+    id='Ur10Heg-v6',
+    entry_point = 'gym.envs.robotics:Ur10HegCorrectiveVaryEnv',
+    max_episode_steps = 200,
 )
 
 

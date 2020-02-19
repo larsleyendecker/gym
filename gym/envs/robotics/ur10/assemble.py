@@ -23,7 +23,7 @@ MODEL_XML_PATH_SLOW_SH_CONF2 = os.path.join(*[HOME_PATH, "DRL_SetBot-RearVentila
 
 initial_qpos = numpy.array([1.5708, -1.3, 2.1, -0.80, 1.5708, 3.14159])
 initial_qpos_simpheg = numpy.array([1.5708, -1.3, 2.1, -0.80, 1.5708, 0])
-initial_qpos_simpheg_conf2=numpy.array([0, -1.3, 2.1, -0.80, 1.5708, 0])
+initial_qpos_simpheg_conf2 = numpy.array([0, -1.3, 2.1, -0.80, 1.5708, 0])
 
 class Ur10HegEnv(ur10_env.Ur10Env, utils.EzPickle):
     def __init__(self, reward_type='dense'):
@@ -49,13 +49,20 @@ class Ur10HegRelEnv(ur10_rel_env.Ur10Env, utils.EzPickle):
 class Ur10HegSHRelEnv(ur10_rel_simpheg_env.Ur10Env, utils.EzPickle):
     def __init__(self, reward_type='dense'):
         ur10_rel_simpheg_env.Ur10Env.__init__(
-            self, MODEL_XML_PATH_SLOW_SH_CONF2, n_substeps=2, distance_threshold=0.02,
+            self, MODEL_XML_PATH_SLOW_SH_CONF2, n_substeps=200, distance_threshold=0.001,
             initial_qpos=initial_qpos_simpheg_conf2, reward_type=reward_type, ctrl_type='cartesian')
         utils.EzPickle.__init__(self)
 
 class Ur10HegCorrectiveEnv(ur10_corrective_env.Ur10Env, utils.EzPickle):
     def __init__(self, reward_type='dense'):
         ur10_corrective_env.Ur10Env.__init__(
-            self, MODEL_XML_PATH_SLOW_SH_CONF2, n_substeps=2, distance_threshold=0.002,
+            self, MODEL_XML_PATH_SLOW_SH_CONF2, n_substeps=200, distance_threshold=0.001,
             initial_qpos=initial_qpos_simpheg_conf2, reward_type=reward_type, ctrl_type='cartesian')
+        utils.EzPickle.__init__(self)
+
+class Ur10HegCorrectiveVaryEnv(ur10_corrective_env.Ur10Env, utils.EzPickle):
+    def __init__(self, reward_type='dense'):
+        ur10_corrective_env.Ur10Env.__init__(
+            self, MODEL_XML_PATH_SLOW_SH_CONF2, n_substeps=200, distance_threshold=0.001,
+            initial_qpos=initial_qpos_simpheg_conf2, reward_type=reward_type, ctrl_type='cartesian', vary=True)
         utils.EzPickle.__init__(self)
