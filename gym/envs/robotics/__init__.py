@@ -19,6 +19,6 @@ from gym.envs.robotics.ur5.assemble import Ur5HegCartEnv
 from gym.envs.robotics.ur10.assemble import Ur10HegEnv
 from gym.envs.robotics.ur10.assemble import Ur10HegSparseEnv
 from gym.envs.robotics.ur10.assemble import Ur10HegRelEnv
-from gym.envs.robotics.ur10.assemble import Ur10HegSHRelEnv
+from gym.envs.robotics.ur10.assemble import Ur10HegRelVaryEnv
 from gym.envs.robotics.ur10.assemble import Ur10HegCorrectiveEnv
 from gym.envs.robotics.ur10.assemble import Ur10HegCorrectiveVaryEnv

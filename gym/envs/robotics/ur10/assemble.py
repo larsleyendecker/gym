@@ -39,30 +39,30 @@ class Ur10HegSparseEnv(ur10_env.Ur10Env, utils.EzPickle):
             initial_qpos=initial_qpos, reward_type=reward_type, ctrl_type='cartesian')
         utils.EzPickle.__init__(self)
 
-class Ur10HegRelEnv(ur10_rel_env.Ur10Env, utils.EzPickle):
+class Ur10HegRelEnv(ur10_corrective_env.Ur10Env, utils.EzPickle):
     def __init__(self, reward_type='dense'):
-        ur10_rel_env.Ur10Env.__init__(
-            self, MODEL_XML_PATH_SLOW, n_substeps=10, distance_threshold=0.02,
-            initial_qpos=initial_qpos, reward_type=reward_type, ctrl_type='cartesian')
+        ur10_corrective_env.Ur10Env.__init__(
+            self, MODEL_XML_PATH_SLOW_SH_CONF2, n_substeps=100, distance_threshold=0.001,
+            initial_qpos=initial_qpos_simpheg_conf2, reward_type=reward_type, ctrl_type='cartesian', corrective=False)
         utils.EzPickle.__init__(self)
 
-class Ur10HegSHRelEnv(ur10_rel_simpheg_env.Ur10Env, utils.EzPickle):
+class Ur10HegRelVaryEnv(ur10_corrective_env.Ur10Env, utils.EzPickle):
     def __init__(self, reward_type='dense'):
-        ur10_rel_simpheg_env.Ur10Env.__init__(
-            self, MODEL_XML_PATH_SLOW_SH_CONF2, n_substeps=200, distance_threshold=0.001,
-            initial_qpos=initial_qpos_simpheg_conf2, reward_type=reward_type, ctrl_type='cartesian')
+        ur10_corrective_env.Ur10Env.__init__(
+            self, MODEL_XML_PATH_SLOW_SH_CONF2, n_substeps=100, distance_threshold=0.001,
+            initial_qpos=initial_qpos_simpheg_conf2, reward_type=reward_type, ctrl_type='cartesian', corrective=False, vary=True)
         utils.EzPickle.__init__(self)
 
 class Ur10HegCorrectiveEnv(ur10_corrective_env.Ur10Env, utils.EzPickle):
     def __init__(self, reward_type='dense'):
         ur10_corrective_env.Ur10Env.__init__(
-            self, MODEL_XML_PATH_SLOW_SH_CONF2, n_substeps=200, distance_threshold=0.001,
+            self, MODEL_XML_PATH_SLOW_SH_CONF2, n_substeps=100, distance_threshold=0.001,
             initial_qpos=initial_qpos_simpheg_conf2, reward_type=reward_type, ctrl_type='cartesian')
         utils.EzPickle.__init__(self)
 
 class Ur10HegCorrectiveVaryEnv(ur10_corrective_env.Ur10Env, utils.EzPickle):
     def __init__(self, reward_type='dense'):
         ur10_corrective_env.Ur10Env.__init__(
-            self, MODEL_XML_PATH_SLOW_SH_CONF2, n_substeps=200, distance_threshold=0.001,
+            self, MODEL_XML_PATH_SLOW_SH_CONF2, n_substeps=100, distance_threshold=0.001,
             initial_qpos=initial_qpos_simpheg_conf2, reward_type=reward_type, ctrl_type='cartesian', vary=True)
         utils.EzPickle.__init__(self)

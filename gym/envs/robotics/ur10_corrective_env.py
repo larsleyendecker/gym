@@ -27,7 +27,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
 
     def __init__(
         self, model_path, n_substeps, distance_threshold, initial_qpos, reward_type, ctrl_type="joint",
-            fail_threshold=0.25, vary=False
+            fail_threshold=0.25, vary=False, corrective=True
     ):
         """Initializes a new Fetch environment.
 
@@ -44,12 +44,16 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.fail_threshold = fail_threshold
         self.vary = vary
         self.initial_qpos = initial_qpos
+        self.corrective = corrective
         super(Ur10Env, self).__init__(
             model_path=model_path, n_substeps=n_substeps, n_actions=6,
             initial_qpos=initial_qpos)
 
     # GoalEnv methods
     # ----------------------------
+    def activate_noise(self):
+        self.vary=True
+        print('noise has been activated.')
 
     def compute_reward(self, obs, goal, info):
         # Compute distance between goal and the achieved goal.
@@ -89,12 +93,12 @@ class Ur10Env(robot_custom_env.RobotEnv):
 
         if self.ctrl_type == "joint":
             action *= 0.05  # limit maximum change in position
-            # Apply action to simulation.
+            # Apply action #scalarsto simulation.
             utils.ctrl_set_action(self.sim, action)
         elif self.ctrl_type == "cartesian":
             dx = action.reshape(6, )
 
-            max_limit = 0.00005*20
+            max_limit = 0.0001* 10
             # limitation of operation space, we only allow small rotations adjustments in x and z directions, moving in y direction
             x_now = numpy.concatenate((self.sim.data.get_body_xpos("gripper_dummy_heg"), self.sim.data.get_body_xquat("gripper_dummy_heg")))
             x_then = x_now[:3] + dx[:3]*max_limit
@@ -112,24 +116,21 @@ class Ur10Env(robot_custom_env.RobotEnv):
                     dx[i] = + max_limit
                 elif barriers_max[i] < diff_then[i]:
                     dx[i] = - max_limit
-
-
-
             for i in range(3,6):
-                dx[i] = dx[i] * max_limit * 0.01 #slower rotations
+                dx[i] = dx[i] * max_limit
 
-
-            #bias in direction of assembly
-            bias_dir = -self.last_obs[:6]
-            # print(bias_dir)
-            for i in range(3,6):
-                if bias_dir[i] > 0.5:
-                    print(i, bias_dir[i])
-                bias_dir[i] = bias_dir[i] * 0.01 #slower rotations
-            bias_dir /= np.linalg.norm(bias_dir)
-            #print(bias_dir)
-            dx += bias_dir * max_limit * 0.8 * 2.45  #2.45 is the maximum norm of the action vector
-            dx.reshape(6, 1)
+            if self.corrective:
+                # bias in direction of assembly
+                bias_dir = -self.last_obs[:6]
+                # print(bias_dir)
+                for i in range(3,6):
+                    if bias_dir[i] > 0.5:
+                        print(i, bias_dir[i])
+                    bias_dir[i] = bias_dir[i] # slower rotations
+                bias_dir /= np.linalg.norm(bias_dir)
+                # print(bias_dir)
+                dx += bias_dir * max_limit * 0.5
+                dx.reshape(6, 1)
 
             dq = self.get_dq(dx)
             # print(sum(abs(sim.data.qpos-sim.data.ctrl)))
