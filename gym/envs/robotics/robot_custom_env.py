@@ -86,7 +86,6 @@ class RobotEnv(gym.Env):
         self._step_callback()
         obs = self._get_obs()
 
-
         done = False
 
         info = {

@@ -4,6 +4,7 @@ import mujoco_py
 import json
 from gym.envs.robotics import rotations, robot_custom_env, utils
 import os
+from gym.envs.robotics.ur10 import randomize
 import matplotlib.pyplot as plt
 
 def goal_distance(obs, goal):
@@ -38,6 +39,9 @@ class Ur10Env(robot_custom_env.RobotEnv):
             initial_qpos (array): an array of values that define the initial configuration
             reward_type ('sparse' or 'dense'): the reward type, i.e. sparse or dense
         """
+        self.xml_path = model_path
+        self.offset = randomize.randomize_ur10_xml()
+        self.n_substeps = n_substeps
         self.distance_threshold = distance_threshold
         self.reward_type = reward_type
         self.ctrl_type = ctrl_type
@@ -45,12 +49,41 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.vary = vary
         self.initial_qpos = initial_qpos
         self.corrective = corrective
+        self.sim_ctrl_q = initial_qpos
         super(Ur10Env, self).__init__(
             model_path=model_path, n_substeps=n_substeps, n_actions=6,
             initial_qpos=initial_qpos)
-
+        self.p = [900,
+             8000,
+             700,
+             100,
+             100,
+             100]
+        self.d = [12,
+             80,
+             5,
+             0.5,
+             0.5,
+             0.5, ]
+        self.max_T = np.array(
+            [40,
+             50,
+             35,
+             2,
+             2,
+             2])
     # GoalEnv methods
     # ----------------------------
+
+
+    def set_force_for_q(self, q, only_grav_comp=False):
+        self.sim.data.ctrl[:] = self.sim.data.qfrc_bias  # + sim.data.qfrc_bias*0.01*numpy.random.randn(6,)
+        if not only_grav_comp:
+            self.sim.data.ctrl[:] += np.clip(self.p * (q - self.sim.data.qpos) + self.d * (0 - self.sim.data.qvel), -self.max_T, self.max_T)
+        self.sim_ctrl_q = q
+        return self.sim.data.ctrl[:].copy()
+
+
     def activate_noise(self):
         self.vary=True
         print('noise has been activated.')
@@ -85,10 +118,10 @@ class Ur10Env(robot_custom_env.RobotEnv):
         assert action.shape == (6,)
         action = action.copy()  # ensure that we don't change the action outside of this scope
 
-        deviation = sum(abs(self.sim.data.qpos - self.sim.data.ctrl))
+        deviation = sum(abs(self.sim.data.qpos - self.sim_ctrl_q))
         # print(deviation )
         if  deviation > 0.35:  # reset control to current position if deviation too high
-            self.sim.data.ctrl[:] = self.sim.data.qpos + self.get_dq([0, 0, 0.005, 0, 0, 0])
+            self.set_force_for_q(self.sim.data.qpos)
             print('deviation compensated')
 
         if self.ctrl_type == "joint":
@@ -98,7 +131,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
         elif self.ctrl_type == "cartesian":
             dx = action.reshape(6, )
 
-            max_limit = 0.0001* 10
+            max_limit = 0.001
             # limitation of operation space, we only allow small rotations adjustments in x and z directions, moving in y direction
             x_now = numpy.concatenate((self.sim.data.get_body_xpos("gripper_dummy_heg"), self.sim.data.get_body_xquat("gripper_dummy_heg")))
             x_then = x_now[:3] + dx[:3]*max_limit
@@ -132,10 +165,15 @@ class Ur10Env(robot_custom_env.RobotEnv):
                 dx += bias_dir * max_limit * 0.5
                 dx.reshape(6, 1)
 
-            dq = self.get_dq(dx)
+            rot_mat = self.sim.data.get_body_xmat('gripper_dummy_heg')
+            dx_ = np.concatenate([rot_mat.dot(dx[:3]), rot_mat.dot(dx[3:])])  ## transform to right coordinate system
+            dq = self.get_dq(dx_)
+            q = self.sim_ctrl_q + dq
+            self.set_force_for_q(q)
+
+
             # print(sum(abs(sim.data.qpos-sim.data.ctrl)))
-            for i in range(6):
-                self.sim.data.ctrl[i] += dq[i]
+
 
     def get_dq(self, dx):
         jacp = self.sim.data.get_body_jacp(name="gripper_dummy_heg").reshape(3, 6)
@@ -147,6 +185,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
 
     def _get_obs(self):
         # positions
+        rot_mat = self.sim.data.get_body_xmat('gripper_dummy_heg')
         ft = self.sim.data.sensordata
         x_pos = self.sim.data.get_body_xpos("gripper_dummy_heg")
         x_quat = self.sim.data.get_body_xquat("gripper_dummy_heg")
@@ -154,12 +193,11 @@ class Ur10Env(robot_custom_env.RobotEnv):
         rpy = normalize_rad(rotations.mat2euler(x_mat))
 
         obs = np.concatenate([
-            x_pos-self.goal[:3], normalize_rad(rpy-self.goal[3:]), ft
+            rot_mat.dot(x_pos-self.goal[:3]), rot_mat.dot(normalize_rad(rpy-self.goal[3:])), ft
         ])
 
         self.last_obs = obs
         return obs
-
 
     def _viewer_setup(self):
         body_id = self.sim.model.body_name2id('body_link')
@@ -172,7 +210,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
 
     def _render_callback(self):
         # Visualize target.
-        a = 0
+        a=0
 
     def _reset_sim(self):
         if self.vary == True:
@@ -180,12 +218,20 @@ class Ur10Env(robot_custom_env.RobotEnv):
             deviation_q = self.get_dq(deviation_x * 0.005)
         else:
             deviation_q = numpy.array([0, 0, 0, 0, 0, 0])
+
+        del self.sim
+        self.offset = randomize.randomize_ur10_xml()
+        model = mujoco_py.load_model_from_path(self.xml_path)
+        self.sim = mujoco_py.MjSim(model, nsubsteps=self.n_substeps)
+        self.goal = self._sample_goal()
+        if not self.viewer is None:
+            self._get_viewer('human').update_sim(self.sim)
+        #self._get_viewer('human')._ncam = self.sim.model.ncam
+
         self.set_state(self.initial_qpos + deviation_q)
         self.sim.forward()
         self.init_x = numpy.concatenate((self.sim.data.get_body_xpos("gripper_dummy_heg"), self.sim.data.get_body_xquat("gripper_dummy_heg")))
-        self.sim.data.ctrl[:] = self.initial_qpos + deviation_q
-        #self.set_state(qpos)
-        #self.sim.forward()
+        self.set_force_for_q(self.initial_qpos + deviation_q)
         return True
 
     def _sample_goal(self):
@@ -194,9 +240,9 @@ class Ur10Env(robot_custom_env.RobotEnv):
 
         with open(goal_path, encoding='utf-8') as file:
             goal = json.load(file)
-            xpos =  goal['xpos']
+            xpos =  goal['xpos'] + self.offset['body_pos_offset']
             xquat = goal['xquat']
-            rpy = normalize_rad(rotations.quat2euler(xquat))
+            rpy = normalize_rad(rotations.quat2euler(xquat)+self.offset['body_euler_offset'])
         return numpy.concatenate([xpos, rpy]).copy()
 
     def _is_success(self, achieved_goal, desired_goal):

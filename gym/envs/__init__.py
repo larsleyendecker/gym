@@ -389,6 +389,11 @@ register(
     max_episode_steps = 400,
 )
 
+register(
+    id='Ur10Heg-v7',
+    entry_point = 'gym.envs.robotics:Ur10HegRandEnv',
+    max_episode_steps = 400,
+)
 
 def _merge(a, b):
     a.update(b)
