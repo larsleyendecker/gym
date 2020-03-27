@@ -1,7 +1,9 @@
 import xml.etree.ElementTree as ET
 import numpy as np
+import os
 import mujoco_py
 from gym.envs.robotics import rotations
+HOME_PATH = os.getenv("HOME")
 
 damping_arm = 200
 damping_wrist = 75
@@ -12,17 +14,19 @@ friction_heg = [1, 0.05, 0.0001]
 body_pos = np.array([1.57, -0.945, 1.205])
 body_quat = np.array([0.6427876, 0, 0, -0.7660444])
 
-main_xml = "/home/marius/DRL_SetBot-RearVentilation/UR10/ur10_heg_slow_simpheg_conf2_rand.xml"
-main_xml_temp = "/home/marius/DRL_SetBot-RearVentilation/UR10/ur10_heg_slow_simpheg_conf2_rand_temp.xml"
 
-robot_body_xml = "/home/marius/DRL_SetBot-RearVentilation/UR10/ur10_heg/ur10_heg_simpheg_body_rand.xml"
-robot_body_xml_temp = "/home/marius/DRL_SetBot-RearVentilation/UR10/ur10_heg/ur10_heg_simpheg_body_rand_temp.xml"
+ur_path = os.path.join(*[HOME_PATH, "DRL_SetBot-RearVentilation", "UR10"])
+main_xml = os.path.join(*[ur_path, "ur10_heg_slow_simpheg_conf2_rand.xml"])
+main_xml_temp = os.path.join(*[ur_path, "ur10_heg_slow_simpheg_conf2_rand_temp.xml"])
 
-car_body_xml = "/home/marius/DRL_SetBot-RearVentilation/UR10/ur10_heg/car_body_conf2_rand.xml"
-car_body_xml_temp = "/home/marius/DRL_SetBot-RearVentilation/UR10/ur10_heg/car_body_conf2_rand_temp.xml"
+robot_body_xml = os.path.join(*[ur_path, "ur10_heg", "ur10_heg_simpheg_body_rand.xml"])
+robot_body_xml_temp = os.path.join(*[ur_path, "ur10_heg", "ur10_heg_simpheg_body_rand_temp.xml"])
 
-defaults_xml = "/home/marius/DRL_SetBot-RearVentilation/UR10/ur10_heg/ur10_heg_default_rand.xml"
-defaults_xml_temp = "/home/marius/DRL_SetBot-RearVentilation/UR10/ur10_heg/ur10_heg_default_rand_temp.xml"
+car_body_xml = os.path.join(*[ur_path, "ur10_heg", "car_body_conf2_rand.xml"])
+car_body_xml_temp = os.path.join(*[ur_path, "ur10_heg", "car_body_conf2_rand_temp.xml"])
+
+defaults_xml = os.path.join(*[ur_path, "ur10_heg", "ur10_heg_default_rand.xml"])
+defaults_xml_temp = os.path.join(*[ur_path, "ur10_heg", "ur10_heg_default_rand_temp.xml"])
 
 
 def normalize_rad(angles):
