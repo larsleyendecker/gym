@@ -17,16 +17,12 @@ body_quat = np.array([0.6427876, 0, 0, -0.7660444])
 
 ur_path = os.path.join(*[HOME_PATH, "DRL_SetBot-RearVentilation", "UR10"])
 main_xml = os.path.join(*[ur_path, "ur10_heg_slow_simpheg_conf2_rand.xml"])
-main_xml_temp = os.path.join(*[ur_path, "ur10_heg_slow_simpheg_conf2_rand_temp.xml"])
 
 robot_body_xml = os.path.join(*[ur_path, "ur10_heg", "ur10_heg_simpheg_body_rand.xml"])
-robot_body_xml_temp = os.path.join(*[ur_path, "ur10_heg", "ur10_heg_simpheg_body_rand_temp.xml"])
 
 car_body_xml = os.path.join(*[ur_path, "ur10_heg", "car_body_conf2_rand.xml"])
-car_body_xml_temp = os.path.join(*[ur_path, "ur10_heg", "car_body_conf2_rand_temp.xml"])
 
 defaults_xml = os.path.join(*[ur_path, "ur10_heg", "ur10_heg_default_rand.xml"])
-defaults_xml_temp = os.path.join(*[ur_path, "ur10_heg", "ur10_heg_default_rand_temp.xml"])
 
 
 def normalize_rad(angles):
@@ -40,7 +36,7 @@ def normalize_rad(angles):
 
 
 def randomize_ur10_xml(var_mass=0.2, var_damp=0.1, var_fr=0.1, var_grav_x_y=0.1, var_grav_z=0.2, var_body_pos=0.0,
-                       var_body_rot=0):
+                       var_body_rot=0, worker_id=1):
 
     # parameters:
     #
@@ -59,6 +55,11 @@ def randomize_ur10_xml(var_mass=0.2, var_damp=0.1, var_fr=0.1, var_grav_x_y=0.1,
     # return          :  offset of car_body to consider for goal position
     #
     # ______________________________________________________________________
+
+    main_xml_temp = os.path.join(*[ur_path, "ur10_heg_slow_simpheg_conf2_rand_temp_{}.xml".format(worker_id)])
+    robot_body_xml_temp = os.path.join(*[ur_path, "ur10_heg", "ur10_heg_simpheg_body_rand_temp_{}.xml".format(worker_id)])
+    car_body_xml_temp = os.path.join(*[ur_path, "ur10_heg", "car_body_conf2_rand_temp_{}.xml".format(worker_id)])
+    defaults_xml_temp = os.path.join(*[ur_path, "ur10_heg", "ur10_heg_default_rand_temp_{}.xml".format(worker_id)])
 
     # load robot body xml and randomize body masses
     tree = ET.parse(robot_body_xml)
