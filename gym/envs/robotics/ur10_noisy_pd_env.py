@@ -123,7 +123,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
         # print(deviation )
         if  deviation > 0.35:  # reset control to current position if deviation too high
             self.set_force_for_q(self.sim.data.qpos)
-            print('deviation compensated')
+            #print('deviation compensated')
 
         if self.ctrl_type == "joint":
             action *= 0.05  # limit maximum change in position
