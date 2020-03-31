@@ -28,7 +28,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
 
     def __init__(
         self, model_path, n_substeps, distance_threshold, initial_qpos, reward_type, ctrl_type="joint",
-            fail_threshold=0.25, vary=False, corrective=False, worker_id=1
+            fail_threshold=0.25, vary=False, corrective=False, worker_id=1, randomize_kwargs={}
     ):
         """Initializes a new Fetch environment.
 
@@ -51,6 +51,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.corrective = corrective
         self.sim_ctrl_q = initial_qpos
         self.worker_id = worker_id
+        self.randomize_kwargs = randomize_kwargs
         super(Ur10Env, self).__init__(
             model_path=model_path, n_substeps=n_substeps, n_actions=6,
             initial_qpos=initial_qpos)
@@ -221,7 +222,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
             deviation_q = numpy.array([0, 0, 0, 0, 0, 0])
 
         del self.sim
-        self.offset = randomize.randomize_ur10_xml(worker_id = self.worker_id)
+        self.offset = randomize.randomize_ur10_xml(worker_id=self.worker_id, **self.randomize_kwargs)
         model = mujoco_py.load_model_from_path(self.xml_path)
         self.sim = mujoco_py.MjSim(model, nsubsteps=self.n_substeps)
         self.goal = self._sample_goal()

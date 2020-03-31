@@ -56,6 +56,7 @@ def randomize_ur10_xml(var_mass=0.2, var_damp=0.1, var_fr=0.1, var_grav_x_y=0.1,
     #
     # ______________________________________________________________________
 
+
     main_xml_temp = os.path.join(*[ur_path, "ur10_heg_slow_simpheg_conf2_rand_temp_{}.xml".format(worker_id)])
     robot_body_xml_temp = os.path.join(*[ur_path, "ur10_heg", "ur10_heg_simpheg_body_rand_temp_{}.xml".format(worker_id)])
     car_body_xml_temp = os.path.join(*[ur_path, "ur10_heg", "car_body_conf2_rand_temp_{}.xml".format(worker_id)])
