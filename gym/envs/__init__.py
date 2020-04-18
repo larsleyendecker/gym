@@ -392,7 +392,7 @@ register(
 register(
     id='Ur10Heg-v7',
     entry_point = 'gym.envs.robotics:Ur10HegRandEnv',
-    max_episode_steps = 400,
+    max_episode_steps = 500,
 )
 
 def _merge(a, b):

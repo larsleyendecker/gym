@@ -16,13 +16,13 @@ body_quat = np.array([0.6427876, 0, 0, -0.7660444])
 
 
 ur_path = os.path.join(*[HOME_PATH, "DRL_SetBot-RearVentilation", "UR10"])
-main_xml = os.path.join(*[ur_path, "ur10_heg_slow_simpheg_conf2_rand.xml"])
+main_xml = os.path.join(*[ur_path, "ur10_assembly_setup_rand.xml"])
 
-robot_body_xml = os.path.join(*[ur_path, "ur10_heg", "ur10_heg_simpheg_body_rand.xml"])
+robot_body_xml = os.path.join(*[ur_path, "ur10_heg", "ur10_body_heg_rand.xml"])
 
-car_body_xml = os.path.join(*[ur_path, "ur10_heg", "car_body_conf2_rand.xml"])
+car_body_xml = os.path.join(*[ur_path, "ur10_heg", "car_body_rand.xml"])
 
-defaults_xml = os.path.join(*[ur_path, "ur10_heg", "ur10_heg_default_rand.xml"])
+defaults_xml = os.path.join(*[ur_path, "ur10_heg", "ur10_default_rand.xml"])
 
 
 def normalize_rad(angles):
@@ -35,8 +35,8 @@ def normalize_rad(angles):
     return angles
 
 
-def randomize_ur10_xml(var_mass=0.2, var_damp=0.1, var_fr=0.1, var_grav_x_y=0.1, var_grav_z=0.2, var_body_pos=0.0,
-                       var_body_rot=0, worker_id=1):
+def randomize_ur10_xml(var_mass=0.2, var_damp=0.1, var_fr=0.1, var_grav_x_y=0.1, var_grav_z=0.2, var_body_pos=0.02,
+                       var_body_rot=0.5, worker_id=1):
 
     # parameters:
     #
@@ -57,10 +57,13 @@ def randomize_ur10_xml(var_mass=0.2, var_damp=0.1, var_fr=0.1, var_grav_x_y=0.1,
     # ______________________________________________________________________
 
 
-    main_xml_temp = os.path.join(*[ur_path, "ur10_heg_slow_simpheg_conf2_rand_temp_{}.xml".format(worker_id)])
-    robot_body_xml_temp = os.path.join(*[ur_path, "ur10_heg", "ur10_heg_simpheg_body_rand_temp_{}.xml".format(worker_id)])
-    car_body_xml_temp = os.path.join(*[ur_path, "ur10_heg", "car_body_conf2_rand_temp_{}.xml".format(worker_id)])
-    defaults_xml_temp = os.path.join(*[ur_path, "ur10_heg", "ur10_heg_default_rand_temp_{}.xml".format(worker_id)])
+    main_xml_temp = os.path.join(*[ur_path, "ur10_assembly_setup_rand_temp_{}.xml".format(worker_id)])
+    robot_body_rel = os.path.join("ur10_heg", "ur10_body_heg_rand_temp_{}.xml".format(worker_id))
+    car_body_rel = os.path.join("ur10_heg", "car_body_rand_temp_{}.xml".format(worker_id))
+    defaults_rel = os.path.join("ur10_heg", "ur10_default_rand_temp_{}.xml".format(worker_id))
+    robot_body_xml_temp = os.path.join(ur_path, robot_body_rel)
+    car_body_xml_temp = os.path.join(ur_path, car_body_rel)
+    defaults_xml_temp = os.path.join(ur_path, defaults_rel)
 
     # load robot body xml and randomize body masses
     tree = ET.parse(robot_body_xml)
@@ -98,7 +101,7 @@ def randomize_ur10_xml(var_mass=0.2, var_damp=0.1, var_fr=0.1, var_grav_x_y=0.1,
 
     tree.write(defaults_xml_temp)
 
-    # load main xml and randomize gravity
+    # load main xml and randomize gravity, also adapt includes to worker_id
     grav_x = var_grav_x_y * np.random.randn()
     grav_y = var_grav_x_y * np.random.randn()
     grav_z = var_grav_z * np.random.randn() - 9.81
@@ -106,6 +109,13 @@ def randomize_ur10_xml(var_mass=0.2, var_damp=0.1, var_fr=0.1, var_grav_x_y=0.1,
 
     tree = ET.parse(main_xml)
     tree.findall("option")[0].attrib['gravity'] = grav_string
+
+    for include in tree.findall("default")[0].iter("include"):
+        include.attrib['file'] = defaults_rel
+    world_temp_files = [car_body_rel, robot_body_rel]
+    for i, include in enumerate(tree.findall("worldbody")[0].iter("include")):
+        include.attrib['file'] = world_temp_files[i]
+
     tree.write(main_xml_temp)
 
     # load car body xml and change position (offset ist returned by this function)

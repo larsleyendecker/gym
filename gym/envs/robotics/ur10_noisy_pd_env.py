@@ -6,6 +6,7 @@ from gym.envs.robotics import rotations, robot_custom_env, utils
 import os
 from gym.envs.robotics.ur10 import randomize
 import matplotlib.pyplot as plt
+from scipy.signal import lfilter, lfilter_zi, butter
 
 def goal_distance(obs, goal):
     obs = obs[:6]
@@ -51,6 +52,22 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.corrective = corrective
         self.sim_ctrl_q = initial_qpos
         self.worker_id = worker_id
+
+        self.K = numpy.array([14.87, 13.26, 11.13, 10.49, 11.03, 11.47])
+        self.kp = numpy.array([4247, 3342, 3306, 707, 1236, 748])
+        self.ki = numpy.array([70.218, 38.65, 86.12, 19.60, 17.07, 19.40])
+        self.kd = numpy.array([0, 0, 0, 0, 0, 0])  # numpy.array([81.61, 77.38, 10.61, 10.44, 4.75, 9.14])
+        self.kf = numpy.array([28, 16.7, 8.42, 2.42, 4.12, 2.34])
+        self.max_fb = numpy.array([7.18, 1.54, 4.82, 3.22, 1.41, 1.891])
+
+        self.ctrl_buffer = np.repeat(initial_qpos.copy().reshape(1, 6), 4, axis=0)
+        b, a = butter(2, 0.12)
+        self.a = a
+        self.b = b
+        self.zi = [lfilter_zi(b, a) * initial_qpos[i] for i in range(6)]
+        self.qi_diff = 0
+        self.last_target_q = initial_qpos.copy()
+
         self.randomize_kwargs = randomize_kwargs
         super(Ur10Env, self).__init__(
             model_path=model_path, n_substeps=n_substeps, n_actions=6,
@@ -78,12 +95,42 @@ class Ur10Env(robot_custom_env.RobotEnv):
     # ----------------------------
 
 
-    def set_force_for_q(self, q, only_grav_comp=False):
-        self.sim.data.ctrl[:] = self.sim.data.qfrc_bias  # + sim.data.qfrc_bias*0.01*numpy.random.randn(6,)
+    def set_force_for_q(self, q_ctrl, only_grav_comp=False):
+        q_ctrl = q_ctrl.reshape(6, )
+
+        self.ctrl_buffer[1:] = self.ctrl_buffer[:3].copy()
+        self.ctrl_buffer[0] = q_ctrl.copy()
+        target_q = np.zeros(6)
+
+        for i in range(6):
+            target_q[i], zo = lfilter(self.b, self.a, [self.ctrl_buffer[3][i]], zi=self.zi[i])
+            self.zi[i] = zo.copy()
+
+        target_qd = (target_q - self.last_target_q).copy() * 125
+        self.last_target_q = target_q.copy()
+
+        q_diff = target_q - self.sim.data.qpos
+        qd_diff = target_qd - self.sim.data.qvel
+        self.qi_diff += q_diff
+
+        #for j in range(6):
+        #    if np.sign(self.qi_diff[j]) != np.sign(q_diff[j]):
+        #        self.qi_diff[j] = 0
+
+        self.sim.data.ctrl[:] = self.sim.data.qfrc_bias.copy()
+
         if not only_grav_comp:
-            self.sim.data.ctrl[:] += np.clip(self.p * (q - self.sim.data.qpos) + self.d * (0 - self.sim.data.qvel), -self.max_T, self.max_T)
-        self.sim_ctrl_q = q
+            self.sim.data.ctrl[:] += self.K * (np.clip(self.kp * q_diff + self.ki * self.qi_diff,
+                                                       -self.max_fb, self.max_fb) + self.kf * target_qd)
+        self.sim_ctrl_q = q_ctrl
         return self.sim.data.ctrl[:].copy()
+
+    #def set_force_for_q(self, q, only_grav_comp=False):
+    #    self.sim.data.ctrl[:] = self.sim.data.qfrc_bias  # + sim.data.qfrc_bias*0.01*numpy.random.randn(6,)
+    #    if not only_grav_comp:
+    #        self.sim.data.ctrl[:] += np.clip(self.p * (q - self.sim.data.qpos) + self.d * (0 - self.sim.data.qvel), -self.max_T, self.max_T)
+    #    self.sim_ctrl_q = q
+    #    return self.sim.data.ctrl[:].copy()
 
 
     def activate_noise(self):
@@ -169,6 +216,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
 
             rot_mat = self.sim.data.get_body_xmat('gripper_dummy_heg')
             dx_ = np.concatenate([rot_mat.dot(dx[:3]), rot_mat.dot(dx[3:])])  ## transform to right coordinate system
+            #dx_[2]+= 1
             dq = self.get_dq(dx_)
             q = self.sim_ctrl_q + dq
             self.set_force_for_q(q)
@@ -229,6 +277,12 @@ class Ur10Env(robot_custom_env.RobotEnv):
         if not self.viewer is None:
             self._get_viewer('human').update_sim(self.sim)
         #self._get_viewer('human')._ncam = self.sim.model.ncam
+
+        self.ctrl_buffer = np.repeat(self.initial_qpos.copy().reshape(1, 6), 4, axis=0)
+        self.b, self.a = butter(2, 0.12)
+        self.zi = [lfilter_zi(self.b, self.a) * self.initial_qpos[i] for i in range(6)]
+        self.qi_diff = 0
+        self.last_target_q = self.initial_qpos.copy()
 
         self.set_state(self.initial_qpos + deviation_q)
         self.sim.forward()
