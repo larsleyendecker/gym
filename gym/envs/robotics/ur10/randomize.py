@@ -11,7 +11,8 @@ damping_wrist = 75
 friction_body = [1, 0.05, 0.0001]  # [tangential, torsional, rolling]
 friction_heg = [1, 0.05, 0.0001]
 
-body_pos = np.array([1.57, -0.945, 1.205])
+#body_pos = np.array([1.57, -0.945, 1.205])
+body_pos = np.array([2.19, 2.275, 0.95])
 body_quat = np.array([0.6427876, 0, 0, -0.7660444])
 
 
