@@ -5,8 +5,17 @@ import mujoco_py
 from gym.envs.robotics import rotations
 HOME_PATH = os.getenv("HOME")
 
-damping_arm = 200
-damping_wrist = 75
+#damping_arm = 200
+#damping_wrist = 75
+
+damping_pan = 350
+damping_lift = 250
+damping_elbow = 200
+damping_wrist1 = 85
+damping_wrist2 = 75
+damping_wrist3 = 75
+
+
 
 friction_body = [1, 0.05, 0.0001]  # [tangential, torsional, rolling]
 friction_heg = [1, 0.05, 0.0001]
@@ -74,16 +83,22 @@ def randomize_ur10_xml(var_mass=0.2, var_damp=0.1, var_fr=0.1, var_grav_x_y=0.1,
             inertials.append(elem)
 
     for inertial in inertials:          # change masses
-        inertial.attrib['mass'] = str((np.random.randn() * var_mass + 1) * float(inertial.attrib['mass']))
+        inertial.attrib['mass'] = str((np.random.uniform(-var_mass, +var_mass) + 1) * float(inertial.attrib['mass']))
 
     tree.write(robot_body_xml_temp)     # save new xml in temp file to be loaded in gym env
 
     # load defaults xml and randomize joint damping and surface friction
-    damping_arm_rand = damping_arm * (1 + var_damp * np.random.randn())
-    damping_wrist_rand = damping_wrist * (1 + var_damp * np.random.randn())
+    #damping_arm_rand = damping_arm * (1 + np.random.uniform(-var_damp, +var_damp))
+    #damping_wrist_rand = damping_wrist * (1 + np.random.uniform(-var_damp, +var_damp))
+    damping_pan_rand = damping_pan * (1 + np.random.uniform(-var_damp, +var_damp))
+    damping_lift_rand = damping_lift * (1 + np.random.uniform(-var_damp, +var_damp))
+    damping_elbow_rand = damping_elbow * (1 + np.random.uniform(-var_damp, +var_damp))
+    damping_wrist1_rand = damping_wrist1 * (1 + np.random.uniform(-var_damp, +var_damp))
+    damping_wrist2_rand = damping_wrist2 * (1 + np.random.uniform(-var_damp, +var_damp))
+    damping_wrist3_rand = damping_wrist3 * (1 + np.random.uniform(-var_damp, +var_damp))
 
-    friction_body_rand = friction_body * (1 + var_fr * np.random.randn(3, ))
-    friction_heg_rand = friction_heg * (1 + var_fr * np.random.randn(3, ))
+    friction_body_rand = friction_body * (1 + np.random.uniform(-var_fr, +var_fr, (3,)))
+    friction_heg_rand = friction_heg * (1 + np.random.uniform(-var_fr, +var_fr, (3,)))
 
     friction_body_string = "{} {} {}".format(*friction_body_rand)
     friction_heg_string = "{} {} {}".format(*friction_heg_rand)
@@ -91,10 +106,18 @@ def randomize_ur10_xml(var_mass=0.2, var_damp=0.1, var_fr=0.1, var_grav_x_y=0.1,
     tree = ET.parse(defaults_xml)
 
     for default in tree.findall('default'):
-        if default.attrib['class'] == 'ur10:arm':
-            default.findall('joint')[0].attrib['damping'] = str(damping_arm_rand)
-        if default.attrib['class'] == 'ur10:wrist':
-            default.findall('joint')[0].attrib['damping'] = str(damping_wrist_rand)
+        if default.attrib['class'] == 'ur10:pan':
+            default.findall('joint')[0].attrib['damping'] = str(damping_pan_rand)
+        if default.attrib['class'] == 'ur10:lift':
+            default.findall('joint')[0].attrib['damping'] = str(damping_lift_rand)
+        if default.attrib['class'] == 'ur10:elbow':
+            default.findall('joint')[0].attrib['damping'] = str(damping_elbow_rand)
+        if default.attrib['class'] == 'ur10:wrist1':
+            default.findall('joint')[0].attrib['damping'] = str(damping_wrist1_rand)
+        if default.attrib['class'] == 'ur10:wrist2':
+            default.findall('joint')[0].attrib['damping'] = str(damping_wrist2_rand)
+        if default.attrib['class'] == 'ur10:wrist3':
+            default.findall('joint')[0].attrib['damping'] = str(damping_wrist3_rand)
         if default.attrib['class'] == 'body':
             default.findall('geom')[0].attrib['friction'] = friction_body_string
         if default.attrib['class'] == 'heg':
@@ -103,9 +126,9 @@ def randomize_ur10_xml(var_mass=0.2, var_damp=0.1, var_fr=0.1, var_grav_x_y=0.1,
     tree.write(defaults_xml_temp)
 
     # load main xml and randomize gravity, also adapt includes to worker_id
-    grav_x = var_grav_x_y * np.random.randn()
-    grav_y = var_grav_x_y * np.random.randn()
-    grav_z = var_grav_z * np.random.randn() - 9.81
+    grav_x = np.random.uniform(-var_grav_x_y, var_grav_x_y)
+    grav_y = np.random.uniform(-var_grav_x_y, var_grav_x_y)
+    grav_z = np.random.uniform(-var_grav_z, var_grav_z) - 9.81
     grav_string = "{} {} {}".format(grav_x, grav_y, grav_z)
 
     tree = ET.parse(main_xml)
