@@ -11,7 +11,7 @@ from scipy.signal import lfilter, lfilter_zi, butter
 def goal_distance(obs, goal):
     obs = obs[:6]
     assert obs.shape == goal.shape
-    return np.linalg.norm(obs*np.array([1, 1, 1, 0.001, 0.3, 0.3]), axis=-1)
+    return np.linalg.norm(obs*np.array([1, 1, 1, 0.3, 0.3, 0.3]), axis=-1)
 
 def normalize_rad(angles):
     angles = np.array(angles)
@@ -29,7 +29,10 @@ class Ur10Env(robot_custom_env.RobotEnv):
 
     def __init__(
         self, model_path, n_substeps, distance_threshold, initial_qpos, reward_type, ctrl_type="joint",
-            fail_threshold=0.25, vary=False, corrective=False, worker_id=1, randomize_kwargs={}
+            fail_threshold=0.25, vary=False,
+            init_vary_range=numpy.array([0.05, 0.05, 0.05, 4/180*np.pi, 4/180*np.pi, 4/180*np.pi]), corrective=False,
+            worker_id=1, randomize_kwargs={}, pos_std=numpy.array([0, 0, 0, 0, 0, 0]),
+            pos_drift_range=numpy.array([0, 0, 0, 0, 0, 0]), ft_noise=False, ft_drift=False,
     ):
         """Initializes a new Fetch environment.
 
@@ -52,6 +55,19 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.corrective = corrective
         self.sim_ctrl_q = initial_qpos
         self.worker_id = worker_id
+
+        self.init_vary_range = init_vary_range
+
+        self.pos_std = pos_std
+        self.pos_drift_range = pos_drift_range
+        self.pos_drift_val = 0   # set in sim reset function
+
+        self.ft_noise = ft_noise
+        self.ft_drift = ft_drift
+        self.ft_std = numpy.array([0.1, 0.1, 0.1, 0.003, 0.003, 0.003]) #These values are based on measurements
+        self.ft_drift_range = numpy.array([1, 1, 1, 0.015, 0.015, 0.015]) #and these ,too
+        self.ft_drift_val = 0    # set in sim reset function
+
 
         self.K = numpy.array([14.87, 13.26, 11.13, 10.49, 11.03, 11.47])
         self.kp = numpy.array([4247, 3342, 3306, 707, 1236, 748])
@@ -237,13 +253,21 @@ class Ur10Env(robot_custom_env.RobotEnv):
         # positions
         rot_mat = self.sim.data.get_body_xmat('gripper_dummy_heg')
         ft = self.sim.data.sensordata
+        if self.ft_noise:
+            ft += numpy.random.randn(6,) * self.ft_std
+        if self.ft_drift:
+            ft += self.ft_drift_val
+        ft[2] -= 0.350*9.81  # nulling in initial position
         x_pos = self.sim.data.get_body_xpos("gripper_dummy_heg")
-        x_quat = self.sim.data.get_body_xquat("gripper_dummy_heg")
+        x_pos += numpy.random.uniform(-self.pos_std, self.pos_std)
+        x_pos += self.pos_drift_val
+
+        #x_quat = self.sim.data.get_body_xquat("gripper_dummy_heg")
         x_mat = self.sim.data.get_body_xmat("gripper_dummy_heg")
         rpy = normalize_rad(rotations.mat2euler(x_mat))
 
         obs = np.concatenate([
-            rot_mat.dot(x_pos-self.goal[:3]), rot_mat.dot(normalize_rad(rpy-self.goal[3:])), ft
+            rot_mat.dot(x_pos-self.goal[:3]), rot_mat.dot(normalize_rad(rpy-self.goal[3:])), ft.copy()
         ])
 
         self.last_obs = obs
@@ -264,10 +288,14 @@ class Ur10Env(robot_custom_env.RobotEnv):
 
     def _reset_sim(self):
         if self.vary == True:
-            deviation_x = numpy.concatenate((numpy.random.normal(loc=0.0, scale=1.0, size=(3,)), [0, 0, 0]))  # deviation in x,y,z, direction rotation stays the same
-            deviation_q = self.get_dq(deviation_x * 0.005)
+            deviation_x = numpy.random.uniform(-self.init_vary_range, self.init_vary_range)
+            deviation_q = self.get_dq(deviation_x)
         else:
             deviation_q = numpy.array([0, 0, 0, 0, 0, 0])
+
+        if self.ft_drift:
+            self.ft_drift_val = numpy.random.uniform(-self.ft_drift_range, self.ft_drift_range)
+        self.pos_drift_val = numpy.random.uniform(-self.pos_drift_range, self.pos_drift_range)
 
         del self.sim
         self.offset = randomize.randomize_ur10_xml(worker_id=self.worker_id, **self.randomize_kwargs)
@@ -278,15 +306,16 @@ class Ur10Env(robot_custom_env.RobotEnv):
             self._get_viewer('human').update_sim(self.sim)
         #self._get_viewer('human')._ncam = self.sim.model.ncam
 
-        self.ctrl_buffer = np.repeat(self.initial_qpos.copy().reshape(1, 6), 4, axis=0)
+        self.ctrl_buffer = np.repeat((self.initial_qpos + deviation_q).reshape(1, 6), 4, axis=0)
         self.b, self.a = butter(2, 0.12)
-        self.zi = [lfilter_zi(self.b, self.a) * self.initial_qpos[i] for i in range(6)]
+        self.zi = [lfilter_zi(self.b, self.a) * (self.initial_qpos[i] + deviation_q[i]) for i in range(6)]
         self.qi_diff = 0
-        self.last_target_q = self.initial_qpos.copy()
+        self.last_target_q = self.initial_qpos + deviation_q
 
         self.set_state(self.initial_qpos + deviation_q)
         self.sim.forward()
-        self.init_x = numpy.concatenate((self.sim.data.get_body_xpos("gripper_dummy_heg"), self.sim.data.get_body_xquat("gripper_dummy_heg")))
+        self.init_x = numpy.concatenate((self.sim.data.get_body_xpos("gripper_dummy_heg"),
+                                         self.sim.data.get_body_xquat("gripper_dummy_heg")))
         self.set_force_for_q(self.initial_qpos + deviation_q)
         return True
 
@@ -302,7 +331,15 @@ class Ur10Env(robot_custom_env.RobotEnv):
         return numpy.concatenate([xpos, rpy]).copy()
 
     def _is_success(self, achieved_goal, desired_goal):
-        d = goal_distance(achieved_goal, desired_goal)
+        rot_mat = self.sim.data.get_body_xmat('gripper_dummy_heg')
+        x_pos = self.sim.data.get_body_xpos("gripper_dummy_heg")
+        x_mat = self.sim.data.get_body_xmat("gripper_dummy_heg")
+        rpy = normalize_rad(rotations.mat2euler(x_mat))
+        obs = np.concatenate([
+            rot_mat.dot(x_pos-self.goal[:3]), rot_mat.dot(normalize_rad(rpy-self.goal[3:]))
+        ])
+
+        d = goal_distance(obs, desired_goal)
         return (d < self.distance_threshold).astype(np.float32)
 
     def _is_failure(self, achieved_goal, desired_goal):
