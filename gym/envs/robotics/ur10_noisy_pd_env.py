@@ -260,11 +260,13 @@ class Ur10Env(robot_custom_env.RobotEnv):
         ft[2] -= 0.350*9.81  # nulling in initial position
         x_pos = self.sim.data.get_body_xpos("gripper_dummy_heg")
         x_pos += numpy.random.uniform(-self.pos_std[:3], self.pos_std[:3])
-        x_pos += self.pos_drift_val
+        x_pos += self.pos_drift_val[:3]
 
         #x_quat = self.sim.data.get_body_xquat("gripper_dummy_heg")
         x_mat = self.sim.data.get_body_xmat("gripper_dummy_heg")
-        rpy = normalize_rad(rotations.mat2euler(x_mat) + numpy.random.uniform(-self.pos_std[3:], self.pos_std[3:]))
+        rpy = normalize_rad(rotations.mat2euler(x_mat)
+                            + numpy.random.uniform(-self.pos_std[3:], self.pos_std[3:])
+                            + self.pos_drift_val[3:])
 
         obs = np.concatenate([
             rot_mat.dot(x_pos-self.goal[:3]), rot_mat.dot(normalize_rad(rpy-self.goal[3:])), ft.copy()
