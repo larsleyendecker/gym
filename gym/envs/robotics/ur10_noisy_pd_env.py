@@ -60,7 +60,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
 
         self.pos_std = pos_std
         self.pos_drift_range = pos_drift_range
-        self.pos_drift_val = 0   # set in sim reset function
+        self.pos_drift_val = numpy.zeros(6,)   # set in sim reset function
 
         self.ft_noise = ft_noise
         self.ft_drift = ft_drift
