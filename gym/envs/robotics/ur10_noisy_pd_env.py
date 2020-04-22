@@ -30,7 +30,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
     def __init__(
         self, model_path, n_substeps, distance_threshold, initial_qpos, reward_type, ctrl_type="joint",
             fail_threshold=0.25, vary=False,
-            init_vary_range=numpy.array([0.05, 0.05, 0.05, 4/180*np.pi, 4/180*np.pi, 4/180*np.pi]), corrective=False,
+            init_vary_range=numpy.array([0.03, 0.03, 0.03, 3/180*np.pi, 3/180*np.pi, 3/180*np.pi]), corrective=False,
             worker_id=1, randomize_kwargs={}, pos_std=numpy.array([0, 0, 0, 0, 0, 0]),
             pos_drift_range=numpy.array([0, 0, 0, 0, 0, 0]), ft_noise=False, ft_drift=False,
     ):
