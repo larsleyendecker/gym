@@ -252,7 +252,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
     def _get_obs(self):
         # positions
         rot_mat = self.sim.data.get_body_xmat('gripper_dummy_heg')
-        ft = self.sim.data.sensordata
+        ft = self.sim.data.sensordata.copy()
         if self.ft_noise:
             ft += numpy.random.randn(6,) * self.ft_std
         if self.ft_drift:
