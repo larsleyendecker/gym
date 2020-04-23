@@ -257,7 +257,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
             ft += numpy.random.randn(6,) * self.ft_std
         if self.ft_drift:
             ft += self.ft_drift_val
-        ft[2] -= 0.350*9.81  # nulling in initial position
+        ft[1] -= 0.350*9.81  # nulling in initial position
         x_pos = self.sim.data.get_body_xpos("gripper_dummy_heg")
         x_pos += numpy.random.uniform(-self.pos_std[:3], self.pos_std[:3])
         x_pos += self.pos_drift_val[:3]
@@ -316,6 +316,9 @@ class Ur10Env(robot_custom_env.RobotEnv):
 
         self.set_state(self.initial_qpos + deviation_q)
         self.sim.forward()
+        for i in range(100):
+            self.sim.data.ctrl[:] = self.sim.data.qfrc_bias.copy()
+            self.sim.step()
         self.init_x = numpy.concatenate((self.sim.data.get_body_xpos("gripper_dummy_heg"),
                                          self.sim.data.get_body_xquat("gripper_dummy_heg")))
         self.set_force_for_q(self.initial_qpos + deviation_q)
