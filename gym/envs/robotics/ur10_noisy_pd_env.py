@@ -33,7 +33,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
             init_vary_range=numpy.array([0.03, 0.03, 0.03, 3/180*np.pi, 3/180*np.pi, 3/180*np.pi]), corrective=False,
             worker_id=1, randomize_kwargs={}, pos_std=numpy.array([0, 0, 0, 0, 0, 0]),
             pos_drift_range=numpy.array([0, 0, 0, 0, 0, 0]), ft_noise=False, ft_drift=False, punish_force=False,
-            punish_force_thresh=15,
+            punish_force_thresh=20,
     ):
         """Initializes a new Fetch environment.
 
@@ -168,7 +168,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
             rew = -d
             force_amp = numpy.linalg.norm(obs[6:9])
             if self.punish_force and force_amp > self.punish_force_thresh:
-                rew -= 0.1 * force_amp
+                rew -= 0.01 * force_amp
 
             return rew
 
