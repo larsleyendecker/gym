@@ -203,7 +203,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
         elif self.ctrl_type == "cartesian":
             dx = action.reshape(6, )
 
-            max_limit = 0.001
+            max_limit = 0.0002
             # limitation of operation space, we only allow small rotations adjustments in x and z directions, moving in y direction
             x_now = numpy.concatenate((self.sim.data.get_body_xpos("gripper_dummy_heg"), self.sim.data.get_body_xquat("gripper_dummy_heg")))
             x_then = x_now[:3] + dx[:3]*max_limit
