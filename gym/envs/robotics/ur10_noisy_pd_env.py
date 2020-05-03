@@ -33,7 +33,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
             init_vary_range=numpy.array([0.03, 0.03, 0.03, 3/180*np.pi, 3/180*np.pi, 3/180*np.pi]), corrective=False,
             worker_id=1, randomize_kwargs={}, pos_std=numpy.array([0, 0, 0, 0, 0, 0]),
             pos_drift_range=numpy.array([0, 0, 0, 0, 0, 0]), ft_noise=False, ft_drift=False, punish_force=False,
-            punish_force_thresh=20, punish_force_factor=0.001
+            punish_force_thresh=20, punish_force_factor=0.001, dx_max=0.0001
     ):
         """Initializes a new Fetch environment.
 
@@ -44,6 +44,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
             initial_qpos (array): an array of values that define the initial configuration
             reward_type ('sparse' or 'dense'): the reward type, i.e. sparse or dense
         """
+        self.dx_max=dx_max
         self.xml_path = model_path
         self.offset = randomize.randomize_ur10_xml()
         self.n_substeps = n_substeps
@@ -203,7 +204,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
         elif self.ctrl_type == "cartesian":
             dx = action.reshape(6, )
 
-            max_limit = 0.0002
+            max_limit = self.dx_max
             # limitation of operation space, we only allow small rotations adjustments in x and z directions, moving in y direction
             x_now = numpy.concatenate((self.sim.data.get_body_xpos("gripper_dummy_heg"), self.sim.data.get_body_xquat("gripper_dummy_heg")))
             x_then = x_now[:3] + dx[:3]*max_limit
@@ -211,8 +212,8 @@ class Ur10Env(robot_custom_env.RobotEnv):
             #diff_now = numpy.array(x_now - self.init_x).reshape(7,)
             diff_then = numpy.array(x_then[:3] - self.init_x[:3])
 
-            barriers_min = numpy.array([-0.1, -0.05,   -0.1])
-            barriers_max = numpy.array([0.1,  0.2, 0.1])
+            barriers_min = numpy.array([-0.2, -0.2,   -0.2])
+            barriers_max = numpy.array([0.2,  0.4, 0.2])
 
             for i in range(3):
                 if (barriers_min[i] < diff_then[i] < barriers_max[i]):

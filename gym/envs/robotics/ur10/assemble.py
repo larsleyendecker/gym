@@ -71,6 +71,6 @@ class Ur10HegCorrectiveVaryEnv(ur10_corrective_env.Ur10Env, utils.EzPickle):
 class Ur10HegRandEnv(ur10_noisy_pd_env.Ur10Env, utils.EzPickle):
     def __init__(self, reward_type='dense'):
         ur10_noisy_pd_env.Ur10Env.__init__(
-            self, MODEL_XML_PATH_RAND, n_substeps=80, distance_threshold=0.001,
+            self, MODEL_XML_PATH_RAND, n_substeps=80, distance_threshold=0.005,
             initial_qpos=initial_qpos_simpheg_conf2, reward_type=reward_type, ctrl_type='cartesian', vary=False)
         utils.EzPickle.__init__(self)

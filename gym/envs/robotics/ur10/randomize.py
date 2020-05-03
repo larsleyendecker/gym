@@ -45,7 +45,7 @@ def normalize_rad(angles):
     return angles
 
 
-def randomize_ur10_xml(var_mass=0.2, var_damp=0.1, var_fr=0.1, var_grav_x_y=0.1, var_grav_z=0.2, var_body_pos=0.00,
+def randomize_ur10_xml(var_mass=0.2, var_damp=0.1, var_fr=0.1, var_grav_x_y=0.1, var_grav_z=0.2, var_body_pos=0.05,
                        var_body_rot=0, worker_id=1):
 
     # parameters:
