@@ -215,14 +215,14 @@ class Ur10Env(robot_custom_env.RobotEnv):
             barriers_min = numpy.array([-0.2, -0.2,   -0.2])
             barriers_max = numpy.array([0.2,  0.4, 0.2])
 
-            for i in range(3):
-                if (barriers_min[i] < diff_then[i] < barriers_max[i]):
-                    dx[i] = dx[i] * max_limit
-                elif barriers_min[i] > diff_then[i]:
-                    dx[i] = + max_limit
-                elif barriers_max[i] < diff_then[i]:
-                    dx[i] = - max_limit
-            for i in range(3,6):
+            #for i in range(3):
+            #    if (barriers_min[i] < diff_then[i] < barriers_max[i]):
+            #    dx[i] = dx[i] * max_limit
+            #    elif barriers_min[i] > diff_then[i]:
+            #        dx[i] = + max_limit
+            #    elif barriers_max[i] < diff_then[i]:
+            #        dx[i] = - max_limit
+            for i in range(6):
                 dx[i] = dx[i] * max_limit
 
             if self.corrective:
