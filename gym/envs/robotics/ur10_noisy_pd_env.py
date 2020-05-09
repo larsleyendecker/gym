@@ -324,13 +324,18 @@ class Ur10Env(robot_custom_env.RobotEnv):
 
         self.set_state(self.initial_qpos + deviation_q)
         self.sim.forward()
-        for i in range(100):
-            self.sim.data.ctrl[:] = self.sim.data.qfrc_bias.copy()
-            self.sim.step()
-        self.init_x = numpy.concatenate((self.sim.data.get_body_xpos("gripper_dummy_heg"),
-                                         self.sim.data.get_body_xquat("gripper_dummy_heg")))
-        self.set_force_for_q(self.initial_qpos + deviation_q)
-        return True
+
+        self.sim.step()
+
+        if self.sim.data.ncon == 0:
+            for i in range(100):
+                self.sim.data.ctrl[:] = self.sim.data.qfrc_bias.copy()
+                self.sim.step()
+            self.init_x = numpy.concatenate((self.sim.data.get_body_xpos("gripper_dummy_heg"),
+                                             self.sim.data.get_body_xquat("gripper_dummy_heg")))
+            self.set_force_for_q(self.initial_qpos + deviation_q)
+
+        return self.sim.data.ncon == 0
 
     def _sample_goal(self):
         home_path = os.getenv("HOME")
