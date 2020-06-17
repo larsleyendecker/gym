@@ -15,11 +15,12 @@ import os
 
 # Ensure we get the path separator correct on windows
 HOME_PATH = os.getenv("HOME")
-MODEL_XML_PATH = os.path.join(*[HOME_PATH, "DRL_SetBot-RearVentilation", "UR10", "ur10_heg.xml"])
-MODEL_XML_PATH_SLOW = os.path.join(*[HOME_PATH, "DRL_SetBot-RearVentilation", "UR10", "ur10_heg_slow.xml"])
-MODEL_XML_PATH_SLOW_SH = os.path.join(*[HOME_PATH, "DRL_SetBot-RearVentilation", "UR10", "ur10_heg_slow_simpheg.xml"])
-MODEL_XML_PATH_SLOW_SH_CONF2 = os.path.join(*[HOME_PATH, "DRL_SetBot-RearVentilation", "UR10", "ur10_heg_slow_simpheg_conf2.xml"])
-MODEL_XML_PATH_RAND = os.path.join(*[HOME_PATH, "DRL_SetBot-RearVentilation", "UR10", "ur10_assembly_setup_rand_temp_1.xml"])
+MODEL_PATH = os.path.join(*[HOME_PATH,"DRL_AI4RoMoCo", "code", "environment" ,"UR10"])
+MODEL_XML_PATH = os.path.join(*[MODEL_PATH,"ur10_heg.xml"])
+MODEL_XML_PATH_SLOW = os.path.join(*[MODEL_PATH,"ur10_heg_slow.xml"])
+MODEL_XML_PATH_SLOW_SH = os.path.join(*[MODEL_PATH, "ur10_heg_slow_simpheg.xml"])
+MODEL_XML_PATH_SLOW_SH_CONF2 = os.path.join(*[MODEL_PATH, "ur10_heg_slow_simpheg_conf2.xml"])
+MODEL_XML_PATH_RAND = os.path.join(*[MODEL_PATH, "ur10_assembly_setup_rand_temp_1.xml"])
 
 
 initial_qpos = numpy.array([1.5708, -1.3, 2.1, -0.80, 1.5708, 3.14159])
