@@ -1,4 +1,5 @@
 import numpy as np
+import pandas
 import numpy
 import mujoco_py
 import json
@@ -8,10 +9,14 @@ from gym.envs.robotics.ur10 import randomize
 import matplotlib.pyplot as plt
 from scipy.signal import lfilter, lfilter_zi, butter
 
+HOME = os.getenv("HOME")
+SAVE_PATH = os.path.join(*[HOME, "DRL_AI4RoMoCo", "code", "data", "sim_poses"])
+
 def goal_distance(obs, goal):
     obs = obs[:6]
     assert obs.shape == goal.shape
     return np.linalg.norm(obs*np.array([1, 1, 1, 0.3, 0.3, 0.3]), axis=-1)
+
 
 def normalize_rad(angles):
     angles = np.array(angles)
@@ -35,6 +40,16 @@ class Ur10Env(robot_custom_env.RobotEnv):
             pos_drift_range=numpy.array([0, 0, 0, 0, 0, 0]), ft_noise=False, ft_drift=False, punish_force=False,
             punish_force_thresh=20, punish_force_factor=0.001, dx_max=0.0001
     ):
+
+        # Parameter for Custom Savings
+        self.save_data = True
+        self.episode = 0
+        self.rewards = []
+        self.distances = []
+        #self.sim_poses = []
+        ##############################
+
+
         """Initializes a new Fetch environment.
 
         Args:
@@ -170,7 +185,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
             force_amp = numpy.linalg.norm(obs[6:9])
             if self.punish_force and force_amp > self.punish_force_thresh:
                 rew -= self.punish_force_factor * force_amp
-
+            self.rewards.append(rew)
             return rew
 
     # RobotEnv methods
@@ -297,6 +312,21 @@ class Ur10Env(robot_custom_env.RobotEnv):
         a=0
 
     def _reset_sim(self):
+
+
+        if self.save_data == True and self.episode > 0:
+        #    sim_poses_df = pandas.DataFrame(self.sim_poses, columns=["x", "y", "z", "rx", "ry", "rz"])
+            sim_distance_001_df = pandas.DataFrame(self.distances, columns=["Distance"])
+            sim_rewards_001_df = pandas.DataFrame(self.rewards, columns=["reward"])
+            sim_rewards_001_df.to_feather(os.path.join(*[SAVE_PATH, "sim_rewards_001_{}.ftr".format(self.episode)]))
+            sim_distance_001_df.to_feather(os.path.join(*[SAVE_PATH, "sim_distances_001_{}.ftr".format(self.episode)]))
+        #    sim_poses_000_df.to_feather(os.path.join(*[SAVE_PATH, "sim_poses_001_{}.ftr".format(self.episode)]))
+        #self.sim_poses = []
+        self.rewards = []
+        self.distances = []
+        self.episode += 1
+
+        
         if self.vary == True:
             deviation_x = numpy.random.uniform(-self.init_vary_range, self.init_vary_range)
             deviation_q = self.get_dq(deviation_x)
@@ -339,7 +369,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
 
     def _sample_goal(self):
         home_path = os.getenv("HOME")
-        goal_path = os.path.join(*[home_path, "DRL_SetBot-RearVentilation", "experiment_configs", "goal_ur10_simpheg_conf2.json"])
+        goal_path = os.path.join(*[home_path, "DRL_AI4RoMoCo", "code", "environment", "experiment_configs", "goal_ur10_simpheg_conf2.json"])
 
         with open(goal_path, encoding='utf-8') as file:
             goal = json.load(file)
@@ -358,6 +388,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
         ])
 
         d = goal_distance(obs, desired_goal)
+        self.distances.append(d)
         return (d < self.distance_threshold).astype(np.float32)
 
     def _is_failure(self, achieved_goal, desired_goal):

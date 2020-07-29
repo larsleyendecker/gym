@@ -13,6 +13,7 @@ HOME = os.getenv("HOME")
 SAVE_PATH = os.path.join(*[HOME, "DRL_AI4RoMoCo", "code", "data", "sim_poses"])
 
 def goal_distance(obs, goal):
+    global distances
     '''Computation of the distance between gripper and goal'''
     obs = obs[:6]
     assert obs.shape == goal.shape
@@ -39,9 +40,11 @@ class Ur10Env(robot_custom_env.RobotEnv):
     
     
         # Parameter for Custom Savings
-        self.save_data = False
+        self.save_data = True
         self.episode = 0
-        self.sim_poses = []
+        self.rewards = []
+        self.distances = []
+        #self.sim_poses = []
         ##############################
 
         # Setup parameters        
@@ -125,6 +128,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
             #    reward = -8000 + numpy.round(self.sim.get_state()[0]/0.0005).astype('int')
             return -(d > self.distance_threshold).astype(np.float32) - 10*(d > self.fail_threshold).astype(np.float)
         else:
+            self.rewards.append(-d)
             return -d
 
     # RobotEnv methods
@@ -233,11 +237,17 @@ class Ur10Env(robot_custom_env.RobotEnv):
     
     def _reset_sim(self):
 
-        #if self.save_data == True and self.episode > 0:
+        if self.save_data == True and self.episode > 0:
         #    sim_poses_df = pandas.DataFrame(self.sim_poses, columns=["x", "y", "z", "rx", "ry", "rz"])
-        #    sim_poses_df.to_feather(os.path.join(*[SAVE_PATH, "poses_static_norm_{}.ftr".format(self.episode)]))
+            sim_distance_001_df = pandas.DataFrame(self.distances, columns=["Distance"])
+            sim_rewards_001_df = pandas.DataFrame(self.rewards, columns=["reward"])
+            sim_rewards_001_df.to_feather(os.path.join(*[SAVE_PATH, "sim_rewards_000_{}.ftr".format(self.episode)]))
+            sim_distance_001_df.to_feather(os.path.join(*[SAVE_PATH, "sim_distances_000_{}.ftr".format(self.episode)]))
+        #    sim_poses_000_df.to_feather(os.path.join(*[SAVE_PATH, "sim_poses_000_{}.ftr".format(self.episode)]))
         #self.sim_poses = []
-        #self.episode += 1
+        self.rewards = []
+        self.distances = []
+        self.episode += 1
 
         #if not self.viewer is None:
         #    self._get_viewer('human').update_sim(self.sim)
@@ -286,8 +296,8 @@ class Ur10Env(robot_custom_env.RobotEnv):
         obs = np.concatenate([
             rot_mat.dot(x_pos-self.goal[:3]), rot_mat.dot(normalize_rad(rpy-self.goal[3:]))
         ])
-
         d = goal_distance(obs, desired_goal)
+        self.distances.append(d)
         return (d < self.distance_threshold).astype(np.float32)
 
     def _is_failure(self, achieved_goal, desired_goal):
