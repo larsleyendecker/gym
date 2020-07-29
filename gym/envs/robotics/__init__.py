@@ -23,3 +23,4 @@ from gym.envs.robotics.ur10.assemble import Ur10HegRelVaryEnv
 from gym.envs.robotics.ur10.assemble import Ur10HegCorrectiveEnv
 from gym.envs.robotics.ur10.assemble import Ur10HegCorrectiveVaryEnv
 from gym.envs.robotics.ur10.assemble import Ur10HegRandEnv
+from gym.envs.robotics.ur10.assemble import Ur10HegStaticEnv
