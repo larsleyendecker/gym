@@ -42,7 +42,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
     ):
 
         # Parameter for Custom Savings
-        self.save_data = True
+        self.save_data = False
         self.episode = 0
         self.rewards = []
         self.distances = []

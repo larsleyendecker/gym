@@ -6,14 +6,12 @@ import json
 from gym.envs.robotics import rotations, robot_custom_env, utils
 import os
 from gym.envs.robotics.ur10 import randomize
-import matplotlib.pyplot as plt
 from scipy.signal import lfilter, lfilter_zi, butter
 
 HOME = os.getenv("HOME")
 SAVE_PATH = os.path.join(*[HOME, "DRL_AI4RoMoCo", "code", "data", "sim_poses"])
 
 def goal_distance(obs, goal):
-    global distances
     '''Computation of the distance between gripper and goal'''
     obs = obs[:6]
     assert obs.shape == goal.shape
@@ -30,17 +28,15 @@ def normalize_rad(angles):
     return angles
 
 class Ur10Env(robot_custom_env.RobotEnv):
-    """Superclass for all Ur10 environments.
-    """
+    """Superclass for all Ur10 environments."""
 
     def __init__(
         self, model_path, n_substeps, distance_threshold, initial_qpos, reward_type, ctrl_type="joint",
             fail_threshold=0.25, dx_max=0.0001, corrective=False
     ):
     
-    
         # Parameter for Custom Savings
-        self.save_data = True
+        self.save_data = False
         self.episode = 0
         self.rewards = []
         self.distances = []
@@ -236,7 +232,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
         a=0
     
     def _reset_sim(self):
-
+        
         if self.save_data == True and self.episode > 0:
         #    sim_poses_df = pandas.DataFrame(self.sim_poses, columns=["x", "y", "z", "rx", "ry", "rz"])
             sim_distance_001_df = pandas.DataFrame(self.distances, columns=["Distance"])
@@ -248,7 +244,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.rewards = []
         self.distances = []
         self.episode += 1
-
+        
         #if not self.viewer is None:
         #    self._get_viewer('human').update_sim(self.sim)
         #self._get_viewer('human')._ncam = self.sim.model.ncam
@@ -265,7 +261,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.sim.forward()
         #self.sim.step()
         
-        # Checking if there are no contacts in simulation
+        # Checking if there are contacts in simulation and returning false if so
         if self.sim.data.ncon == 0:
             for i in range(100):
                 self.sim.data.ctrl[:] = self.sim.data.qfrc_bias.copy()
