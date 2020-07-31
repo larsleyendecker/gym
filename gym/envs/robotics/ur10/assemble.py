@@ -21,6 +21,8 @@ MODEL_XML_PATH_SLOW = os.path.join(*[MODEL_PATH,"ur10_heg_slow.xml"])
 MODEL_XML_PATH_SLOW_SH = os.path.join(*[MODEL_PATH, "ur10_heg_slow_simpheg.xml"])
 MODEL_XML_PATH_SLOW_SH_CONF2 = os.path.join(*[MODEL_PATH, "ur10_heg_slow_simpheg_conf2.xml"])
 MODEL_XML_PATH_RAND = os.path.join(*[MODEL_PATH, "ur10_assembly_setup_rand_temp_1.xml"])
+MODEL_XML_PATH_STATIC = os.path.join(*[MODEL_PATH, "ur10_heg_static.xml"])
+MODEL_XML_PATH_STATIC_PD = os.path.join(*[MODEL_PATH, "ur10_heg_static_pd.xml"])
 
 
 initial_qpos = numpy.array([1.5708, -1.3, 2.1, -0.80, 1.5708, 3.14159])
@@ -75,34 +77,17 @@ class Ur10HegRandEnv(ur10_noisy_pd_env.Ur10Env, utils.EzPickle):
             self, MODEL_XML_PATH_RAND, n_substeps=80, distance_threshold=0.005,
             initial_qpos=initial_qpos_simpheg_conf2, reward_type=reward_type, ctrl_type='cartesian', vary=False)
         utils.EzPickle.__init__(self)
-
-'''
-class Ur10HegStaticEnv(ur10_corrective_env.Ur10Env, utils.EzPickle):
-    def __init__(self, reward_type='dense'):
-        ur10_corrective_env.Ur10Env.__init__(
-            self, MODEL_XML_PATH_SLOW_SH_CONF2, n_substeps=80, distance_threshold=0.005,
-            initial_qpos=initial_qpos_simpheg_conf2, reward_type=reward_type, ctrl_type='cartesian')
-        utils.EzPickle.__init__(self)
-'''        
+     
 class Ur10HegStaticEnv(ur10_static_pd_env.Ur10Env, utils.EzPickle):
     def __init__(self, reward_type='dense'):
         ur10_static_pd_env.Ur10Env.__init__(
-            self, MODEL_XML_PATH_SLOW_SH_CONF2, n_substeps=80, distance_threshold=0.005,
+            self, MODEL_XML_PATH_STATIC_PD, n_substeps=80, distance_threshold=0.005,
             initial_qpos=initial_qpos_simpheg_conf2, reward_type=reward_type, ctrl_type='cartesian')
         utils.EzPickle.__init__(self)
 
 class Ur10HegGenesisEnv(ur10_static_env.Ur10Env, utils.EzPickle):
     def __init__(self, reward_type='dense'):
         ur10_static_env.Ur10Env.__init__(
-            self, MODEL_XML_PATH_SLOW_SH_CONF2, n_substeps=80, distance_threshold=0.005,
+            self, MODEL_XML_PATH_STATIC, n_substeps=80, distance_threshold=0.005,
             initial_qpos=initial_qpos_simpheg_conf2, reward_type=reward_type, ctrl_type='cartesian')
         utils.EzPickle.__init__(self)
-
-'''      
-class Ur10HegStaticEnv(ur10_noisy_pd_env.Ur10Env, utils.EzPickle):
-    def __init__(self, reward_type='dense'):
-        ur10_noisy_pd_env.Ur10Env.__init__(
-            self, MODEL_XML_PATH_SLOW_SH_CONF2, n_substeps=80, distance_threshold=0.005,
-            initial_qpos=initial_qpos_simpheg_conf2, reward_type=reward_type, ctrl_type='cartesian')
-        utils.EzPickle.__init__(self)
-'''
