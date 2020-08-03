@@ -131,18 +131,15 @@ class Ur10Env(robot_custom_env.RobotEnv):
     # RobotEnv methods
 
     def _step_callback(self):
-        a = 0
-        # not implemented
+        pass
         
     def set_state(self, qpos):
         old_state = self.sim.get_state()
-        new_state = mujoco_py.MjSimState(old_state.time, qpos, old_state.qvel,
-                                         old_state.act, old_state.udd_state)
+        new_state = mujoco_py.MjSimState(old_state.time, qpos, old_state.qvel, old_state.act, old_state.udd_state)
         self.sim.set_state(new_state)
         self.sim.forward()
 
     def _set_action(self, action):
-
         assert action.shape == (6,)
         action = action.copy()  # ensure that we don't change the action outside of this scope
 
@@ -202,7 +199,6 @@ class Ur10Env(robot_custom_env.RobotEnv):
         dq = numpy.linalg.lstsq(jac, dx)[0].reshape(6, )
         return dq
 
-
     def _get_obs(self):
         # positions
         rot_mat = self.sim.data.get_body_xmat('gripper_dummy_heg')
@@ -229,8 +225,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.viewer.cam.elevation = -14.
 
     def _render_callback(self):
-        # Visualize target.
-        a=0
+        pass
     
     def _reset_sim(self):
         
