@@ -1,72 +1,71 @@
-import os
+import numpy as np
 import numpy
-import yaml
 import pandas
 import mujoco_py
 import json
-
 from gym.envs.robotics import rotations, robot_custom_env, utils
+import os
 from gym.envs.robotics.ur10 import randomize
-
 from scipy.signal import lfilter, lfilter_zi, butter
 
-PROJECT_PATH = os.path.join(*[os.getenv("HOME"), "DRL_AI4RoMoCo"])
-MODEL_PATH = os.path.join(*[PROJECT_PATH, "code", "environment", "UR10"])
-CONFIG_PATH = os.path.join(*[PROJECT_PATH, "code", "config", "environment"])
-SAVE_PATH = os.path.join(*[PROJECT_PATH, "code", "data", "sim_poses"])
+HOME = os.getenv("HOME")
+SAVE_PATH = os.path.join(*[HOME, "DRL_AI4RoMoCo", "code", "data", "sim_poses"])
 
 def goal_distance(obs, goal):
     '''Computation of the distance between gripper and goal'''
     obs = obs[:6]
     assert obs.shape == goal.shape
-    return numpy.linalg.norm(obs*numpy.array([1, 1, 1, 0.3, 0.3, 0.3]), axis=-1)
+    return np.linalg.norm(obs*np.array([1, 1, 1, 0.3, 0.3, 0.3]), axis=-1)
 
 def normalize_rad(angles):
     '''Normalizing Euler angles'''
-    angles = numpy.array(angles)
-    angles = angles % (2*numpy.pi)
-    angles = (angles + 2*numpy.pi) % (2*numpy.pi)
+    angles = np.array(angles)
+    angles = angles % (2*np.pi)
+    angles = (angles + 2*np.pi) % (2*np.pi)
     for i in range(len(angles)):
-        if (angles[i] > numpy.pi):
-            angles[i] -= 2*numpy.pi
+        if (angles[i] > np.pi):
+            angles[i] -= 2*np.pi
     return angles
 
 class Ur10Env(robot_custom_env.RobotEnv):
     """Superclass for all Ur10 environments."""
 
-    def __init__(self, env_config,):
+    def __init__(
+        self, model_path, n_substeps, distance_threshold, initial_qpos, reward_type, ctrl_type="joint",
+            fail_threshold=0.25, dx_max=0.0001, corrective=False,
+    ):
     
-        with open(env_config) as cfg:
-            env_config = yaml.load(cfg, Loader=yaml.FullLoader)
-
         # Parameter for Custom Savings
         self.save_data = False
         self.episode = 0
         self.rewards = []
         self.distances = []
-        self.sim_poses = []
-        
+        #self.sim_poses = []
         ##############################
 
-        self.model_path = os.path.join(*[MODEL_PATH,env_config["model_xml_file"]])  # Path to the environment xml file
-        self.initial_qpos = numpy.array(env_config["initial_qpos"])                 # An array of values that define the initial configuration)
-        self.sim_ctrl_q = self.initial_qpos                                         
-        self.reward_type = env_config["reward_type"]                                # The reward type i.e. sparse or dense
-        self.ctrl_type = env_config["ctrl_type"]                            
-        self.n_substeps = env_config["n_substeps"]                                  # Number of substeps the simulation runs on every call to step
-        self.distance_threshold = env_config["distance_threshold"]                  # The threshold after which a goal is considered achieved
-        self.fail_threshold = env_config["fail_threshold"]                          
-        self.n_actions = env_config["n_actions"]
-        self.corrective = env_config["corrective"]
-        self.vary = env_config["vary"]
-        self.dx_max = env_config["dx_max"]
-        
+        # Setup parameters        
+        # model_path (string): path to the environments XML file
+        # n_substeps (int): number of substeps the simulation runs on every call to step
+        # distance_threshold (float): the threshold after which a goal is considered achieved
+        # initial_qpos (array): an array of values that define the initial configuration
+        # reward_type ('sparse' or 'dense'): the reward type, i.e. sparse or dense
+        self.dx_max=dx_max
+        self.xml_path = model_path
+        self.n_substeps = n_substeps
+        self.distance_threshold = distance_threshold
+        self.reward_type = reward_type
+        self.ctrl_type = ctrl_type
+        self.fail_threshold = fail_threshold
+        self.initial_qpos = initial_qpos
+        self.sim_ctrl_q = initial_qpos
+        self.corrective = corrective
+        self.vary = False
         ########################
 
         
         super(Ur10Env, self).__init__(
-            model_path=self.model_path, n_substeps=self.n_substeps, n_actions=self.n_actions,
-            initial_qpos=self.initial_qpos)
+            model_path=model_path, n_substeps=n_substeps, n_actions=6,
+            initial_qpos=initial_qpos)
                
     # GoalEnv methods
 
@@ -79,10 +78,10 @@ class Ur10Env(robot_custom_env.RobotEnv):
         d = goal_distance(obs, goal)
 
         if self.reward_type == 'sparse':
-            #if (d > self.fail_threshold).astype(numpy.float32):
+            #if (d > self.fail_threshold).astype(np.float32):
             #     #-8000+2n_t  ... sim.get_state()[0]/0.0005 = n_substeps * n_t
             #    reward = -8000 + numpy.round(self.sim.get_state()[0]/0.0005).astype('int')
-            return -(d > self.distance_threshold).astype(numpy.float32) - 10*(d > self.fail_threshold).astype(numpy.float)
+            return -(d > self.distance_threshold).astype(np.float32) - 10*(d > self.fail_threshold).astype(np.float)
         else:
             self.rewards.append(-d)
             return -d
@@ -90,8 +89,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
     # RobotEnv methods
 
     def _step_callback(self):
-        #a = 0
-        pass
+        a = 0
         # not implemented
         
     def set_state(self, qpos):
@@ -148,7 +146,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
                     if bias_dir[i] > 0.5:
                         print(i, bias_dir[i])
                     bias_dir[i] = bias_dir[i] # slower rotations
-                bias_dir /= numpy.linalg.norm(bias_dir)
+                bias_dir /= np.linalg.norm(bias_dir)
                 # print(bias_dir)
                 dx += bias_dir * max_limit * 0.5
                 dx.reshape(6, 1)
@@ -175,7 +173,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
         x_mat = self.sim.data.get_body_xmat("gripper_dummy_heg")
         rpy = normalize_rad(rotations.mat2euler(x_mat))
 
-        obs = numpy.concatenate([
+        obs = np.concatenate([
             rot_mat.dot(x_pos-self.goal[:3]), rot_mat.dot(normalize_rad(rpy-self.goal[3:])), ft.copy()
         ])
         #self.sim_poses.append(numpy.concatenate([x_pos-self.goal[:3], normalize_rad(rpy-self.goal[3:])]))
@@ -241,12 +239,12 @@ class Ur10Env(robot_custom_env.RobotEnv):
         x_pos = self.sim.data.get_body_xpos("gripper_dummy_heg")
         x_mat = self.sim.data.get_body_xmat("gripper_dummy_heg")
         rpy = normalize_rad(rotations.mat2euler(x_mat))
-        obs = numpy.concatenate([
+        obs = np.concatenate([
             rot_mat.dot(x_pos-self.goal[:3]), rot_mat.dot(normalize_rad(rpy-self.goal[3:]))
         ])
         d = goal_distance(obs, desired_goal)
         self.distances.append(d)
-        return (d < self.distance_threshold).astype(numpy.float32)
+        return (d < self.distance_threshold).astype(np.float32)
 
     def _is_failure(self, achieved_goal, desired_goal):
         d = goal_distance(achieved_goal, desired_goal)
