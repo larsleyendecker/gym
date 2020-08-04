@@ -45,6 +45,8 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.rewards = []
         self.distances = []
         self.sim_poses = []
+
+        self.SEED = env_config["SEED"]
         
         ##############################
 
@@ -66,7 +68,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
         
         super(Ur10Env, self).__init__(
             model_path=self.model_path, n_substeps=self.n_substeps, n_actions=self.n_actions,
-            initial_qpos=self.initial_qpos)
+            initial_qpos=self.initial_qpos, seed=self.SEED)
                
     # GoalEnv methods
 

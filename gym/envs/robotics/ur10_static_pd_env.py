@@ -48,6 +48,8 @@ class Ur10Env(robot_custom_env.RobotEnv):
 
         ###########################
 
+        self.SEED = env_config["SEED"]
+
         self.model_path = os.path.join(*[MODEL_PATH,env_config["model_xml_file"]])  # Path to the environment xml file
         self.initial_qpos = numpy.array(env_config["initial_qpos"])                 # An array of values that define the initial configuration)
         self.sim_ctrl_q = self.initial_qpos                                         
@@ -81,7 +83,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
         
         super(Ur10Env, self).__init__(
             model_path=self.model_path, n_substeps=self.n_substeps, n_actions=self.n_actions,
-            initial_qpos=self.initial_qpos)
+            initial_qpos=self.initial_qpos, seed=self.SEED)
                
     # GoalEnv methods
 

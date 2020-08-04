@@ -1,6 +1,8 @@
 import os
 import copy
+import numpy
 import numpy as np
+import random
 
 import gym
 from gym import error, spaces
@@ -33,7 +35,7 @@ def convert_observation_to_space(observation):
 
 
 class RobotEnv(gym.Env):
-    def __init__(self, model_path, initial_qpos, n_actions, n_substeps):
+    def __init__(self, model_path, initial_qpos, n_actions, n_substeps, seed):
         if model_path.startswith('/'):
             fullpath = model_path
         else:
@@ -51,7 +53,7 @@ class RobotEnv(gym.Env):
             'video.frames_per_second': int(np.round(1.0 / self.dt))
         }
 
-        self.seed()
+        self.seed(seed)
         self._env_setup(initial_qpos=initial_qpos)
         self.initial_state = copy.deepcopy(self.sim.get_state())
 
@@ -77,6 +79,9 @@ class RobotEnv(gym.Env):
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
+        os.environ['PYTHONHASHSEED'] = str(seed)
+        numpy.random.seed(seed)
+        random.seed(seed)
         return [seed]
 
     def step(self, action):

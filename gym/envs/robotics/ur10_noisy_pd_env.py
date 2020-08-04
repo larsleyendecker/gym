@@ -46,6 +46,8 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.distances = []
         self.sim_poses = []
 
+        self.SEED = env_config["SEED"]
+
         # Environment Parameter
         self.model_path = os.path.join(*[MODEL_PATH,env_config["model_xml_file"]])  # Path to the environment xml file
         self.initial_qpos = numpy.array(env_config["initial_qpos"])                 # An array of values that define the initial configuration)
@@ -95,7 +97,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.worker_id = 1
         ############################
 
-        super(Ur10Env, self).__init__(model_path=self.model_path, n_substeps=self.n_substeps, n_actions=self.n_actions, initial_qpos=self.initial_qpos)
+        super(Ur10Env, self).__init__(model_path=self.model_path, n_substeps=self.n_substeps, n_actions=self.n_actions, initial_qpos=self.initial_qpos, seed=self.SEED)
         
 
     def set_force_for_q(self, q_ctrl, only_grav_comp=False):
