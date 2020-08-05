@@ -84,7 +84,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
             #if (d > self.fail_threshold).astype(numpy.float32):
             #     #-8000+2n_t  ... sim.get_state()[0]/0.0005 = n_substeps * n_t
             #    reward = -8000 + numpy.round(self.sim.get_state()[0]/0.0005).astype('int')
-            return -(d > self.distance_threshold).astype(numpy.float32) - 10*(d > self.fail_threshold).astype(numpy.float)
+            return -(d > self.distance_threshold).astype(numpy.float32) - 10*(d > self.fail_threshold).astype(numpy.float32)
         else:
             self.rewards.append(-d)
             return -d
