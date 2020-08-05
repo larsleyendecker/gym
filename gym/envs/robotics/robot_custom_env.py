@@ -35,7 +35,7 @@ def convert_observation_to_space(observation):
 
 
 class RobotEnv(gym.Env):
-    def __init__(self, model_path, initial_qpos, n_actions, n_substeps, seed):
+    def __init__(self, model_path, initial_qpos, n_actions, n_substeps, seed, success_reward):
         if model_path.startswith('/'):
             fullpath = model_path
         else:
@@ -56,7 +56,7 @@ class RobotEnv(gym.Env):
         self.seed(seed)
         self._env_setup(initial_qpos=initial_qpos)
         self.initial_state = copy.deepcopy(self.sim.get_state())
-
+        self.success_reward = success_reward
         self.goal = self._sample_goal()
         obs = self._get_obs()
         self.action_space = spaces.Box(-1., 1., shape=(n_actions,), dtype='float32')
@@ -101,7 +101,7 @@ class RobotEnv(gym.Env):
 
         if self._is_success(obs, self.goal):
             done = True
-            reward += 100
+            reward += self.success_reward
         return obs, reward, done, info
 
     def reset(self):

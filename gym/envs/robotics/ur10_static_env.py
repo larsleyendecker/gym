@@ -47,7 +47,9 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.sim_poses = []
 
         self.SEED = env_config["SEED"]
-        
+        self.R1 = env_config["Reward"]["R1"]
+        self.R2 = env_config["Reward"]["R2"]
+        self.success_reward = env_config["Reward"]["success_reward"]
         ##############################
 
         self.model_path = os.path.join(*[MODEL_PATH,env_config["model_xml_file"]])  # Path to the environment xml file
@@ -68,16 +70,16 @@ class Ur10Env(robot_custom_env.RobotEnv):
         
         super(Ur10Env, self).__init__(
             model_path=self.model_path, n_substeps=self.n_substeps, n_actions=self.n_actions,
-            initial_qpos=self.initial_qpos, seed=self.SEED)
+            initial_qpos=self.initial_qpos, seed=self.SEED, success_reward=self.success_reward)
                
     # GoalEnv methods
 
     def activate_noise(self):
         self.vary=True
         print('noise has been activated.')
-
+    '''
     def compute_reward(self, obs, goal, info):
-        '''Compute distance between goal and the achieved goal.'''
+        #Compute distance between goal and the achieved goal.
         d = goal_distance(obs, goal)
 
         if self.reward_type == 'sparse':
@@ -88,7 +90,12 @@ class Ur10Env(robot_custom_env.RobotEnv):
         else:
             self.rewards.append(-d)
             return -d
-
+    '''
+    def compute_reward(self, obs, goal, info):
+        d = goal_distance(obs,goal)
+        f = numpy.absolute(obs[7]) + numpy.absolute(obs[8]) + numpy.absolute(obs[9])
+        rew = self.R1 * (-d) + self.R2 *(-f)
+        return rew
     # RobotEnv methods
 
     def _step_callback(self):
@@ -247,7 +254,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
             rot_mat.dot(x_pos-self.goal[:3]), rot_mat.dot(normalize_rad(rpy-self.goal[3:]))
         ])
         d = goal_distance(obs, desired_goal)
-        self.distances.append(d)
+        #self.distances.append(d)
         return (d < self.distance_threshold).astype(numpy.float32)
 
     def _is_failure(self, achieved_goal, desired_goal):
