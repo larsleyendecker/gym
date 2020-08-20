@@ -1,4 +1,5 @@
 import os
+import numpy
 from gym import utils
 from gym.envs.robotics import ur10_env
 from gym.envs.robotics import ur10_rel_env
@@ -7,11 +8,8 @@ from gym.envs.robotics import ur10_corrective_env
 from gym.envs.robotics import ur10_noisy_pd_env
 from gym.envs.robotics import ur10_static_pd_env
 from gym.envs.robotics import ur10_static_env
-
-import numpy as np
-import numpy
-import os
-
+from gym.envs.robotics import ur10_noisy_position_env
+from gym.envs.robotics import ur10_noisy_force_env
 
 # Ensure we get the path separator correct on windows
 PROJECT_PATH = os.path.join(*[os.getenv("HOME"), "DRL_AI4RoMoCo"])
@@ -20,17 +18,21 @@ MODEL_PATH = os.path.join(*[PROJECT_PATH, "code", "environment" ,"UR10"])
 #MODEL_XML_PATH_SLOW = os.path.join(*[MODEL_PATH,"ur10_heg_slow.xml"])
 #MODEL_XML_PATH_SLOW_SH = os.path.join(*[MODEL_PATH, "ur10_heg_slow_simpheg.xml"])
 #MODEL_XML_PATH_SLOW_SH_CONF2 = os.path.join(*[MODEL_PATH, "ur10_heg_slow_simpheg_conf2.xml"])
+#MODEL_XML_PATH_RAND = os.path.join(*[MODEL_PATH, "ur10_assembly_setup_rand_temp_1.xml"])
+#MODEL_XML_PATH_STATIC = os.path.join(*[MODEL_PATH, "ur10_heg_static.xml"])
+#MODEL_XML_PATH_STATIC_PD = os.path.join(*[MODEL_PATH, "ur10_heg_static_pd.xml"])
+#MODEL_XML_PATH_STATIC = os.path.join(*[PROJECT_PATH, "code", "environment", "UR10_new", "ur10_heg.xml"])
 
-MODEL_XML_PATH_RAND = os.path.join(*[MODEL_PATH, "ur10_assembly_setup_rand_temp_1.xml"])
-MODEL_XML_PATH_STATIC = os.path.join(*[MODEL_PATH, "ur10_heg_static.xml"])
-MODEL_XML_PATH_STATIC_PD = os.path.join(*[MODEL_PATH, "ur10_heg_static_pd.xml"])
-
-static_config_file = "env_config_002.yml"
-static_pd_config_file = "env_config_000.yml"
-rand_pd_config_file = "env_config_001.yml"
-STATIC_CONFIG_PATH = os.path.join(*[PROJECT_PATH,"code", "configs", "environment", static_config_file])
-STATIC_PD_CONFIG_PATH = os.path.join(*[PROJECT_PATH,"code", "configs", "environment", static_pd_config_file])
-RAND_PD_CONFIG_PATH = os.path.join(*[PROJECT_PATH,"code", "configs", "environment", rand_pd_config_file])
+static_position_config_file = "env_config_002.yml"
+noisy_position_config_file = "env_config_003.yml"
+static_force_config_file = "env_config_000.yml"
+noisy_force_config_file="env_config_004.yml"
+rand_force_config_file = "env_config_001.yml"
+STATIC_POSITION_CONFIG_PATH = os.path.join(*[PROJECT_PATH,"code", "configs", "environment", static_position_config_file])
+NOISY_POSITION_CONFIG_PATH = os.path.join(*[PROJECT_PATH,"code", "configs", "environment", noisy_position_config_file])
+STATIC_FORCE_CONFIG_PATH = os.path.join(*[PROJECT_PATH,"code", "configs", "environment", static_force_config_file])
+NOISY_FORCE_CONFIG_PATH = os.path.join(*[PROJECT_PATH,"code", "configs", "environment", noisy_force_config_file])
+RAND_FORCE_CONFIG_PATH = os.path.join(*[PROJECT_PATH,"code", "configs", "environment", rand_force_config_file])
 
 class Ur10HegEnv(ur10_env.Ur10Env, utils.EzPickle):
     def __init__(self, reward_type='dense'):
@@ -99,17 +101,31 @@ class Ur10HegGenesisEnv(ur10_static_env.Ur10Env, utils.EzPickle):
 ############ Using config files ################
 ################################################
 
+# UR10HEG-v001
 class Ur10HegRandEnv(ur10_noisy_pd_env.Ur10Env, utils.EzPickle):
     def __init__(self):
-        ur10_noisy_pd_env.Ur10Env.__init__(self, RAND_PD_CONFIG_PATH)
+        ur10_noisy_pd_env.Ur10Env.__init__(self, RAND_FORCE_CONFIG_PATH)
         utils.EzPickle.__init__(self)
 
+#UR10HEG-v000
 class Ur10HegStaticEnv(ur10_static_pd_env.Ur10Env, utils.EzPickle):
     def __init__(self):
-        ur10_static_pd_env.Ur10Env.__init__(self, STATIC_PD_CONFIG_PATH)
+        ur10_static_pd_env.Ur10Env.__init__(self, STATIC_FORCE_CONFIG_PATH)
         utils.EzPickle.__init__(self)
-
+#UR10HEG-v002
 class Ur10HegGenesisEnv(ur10_static_env.Ur10Env, utils.EzPickle):
     def __init__(self):
-        ur10_static_env.Ur10Env.__init__(self, STATIC_CONFIG_PATH)
+        ur10_static_env.Ur10Env.__init__(self, STATIC_POSITION_CONFIG_PATH)
+        utils.EzPickle.__init__(self)
+
+#UR10HEG-v003
+class Ur10HegNoisyPositionEnv(ur10_noisy_position_env.Ur10Env, utils.EzPickle):
+    def __init__(self):
+        ur10_noisy_position_env.Ur10Env.__init__(self, NOISY_POSITION_CONFIG_PATH)
+        utils.EzPickle.__init__(self)
+
+#UR10HEG-v004
+class Ur10HegNoisyForceEnv(ur10_noisy_force_env.Ur10Env, utils.EzPickle):
+    def __init__(self):
+        ur10_noisy_force_env.Ur10Env.__init__(self, NOISY_FORCE_CONFIG_PATH)
         utils.EzPickle.__init__(self)

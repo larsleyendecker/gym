@@ -60,6 +60,7 @@ class RobotEnv(gym.Env):
         self.goal = self._sample_goal()
         obs = self._get_obs()
         self.action_space = spaces.Box(-1., 1., shape=(n_actions,), dtype='float32')
+        #self.action_space = spaces.Box(-2., 2., shape=(n_actions,), dtype='float64')
 
         self.observation_space = convert_observation_to_space(np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]).astype('float64'))
         self.last_obs = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])

@@ -17,8 +17,8 @@ SAVE_PATH = os.path.join(*[
     "code",
     "data",
     "TEST_SIM",
-    "UR10HEG-v000",
-    "Model10_FC_DL_R2_0075"
+    "UR10HEG-v004",
+    "Model12_FC_SN_R2_005"
     ])
 
 GOAL_PATH = os.path.join(*[
@@ -92,7 +92,6 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.corrective = env_config["corrective"]
         self.vary = env_config["vary"]
         self.dx_max = env_config["dx_max"]
-
         self.only_grav_comp = True
 
         # Controller Parameter
@@ -110,6 +109,19 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.zi = [lfilter_zi(b,a) * self.initial_qpos[i] for i in range(6)]
         self.qi_diff = env_config["controller"]["qi_diff"]
         self.last_target_q = self.initial_qpos.copy()
+
+        self.f_mean = env_config["Noise"]["f_mean"]
+        self.t_mean = env_config["Noise"]["t_mean"]
+        self.pos_mean = env_config["Noise"]["pos_mean"]
+        self.rot_mean = env_config["Noise"]["rot_mean"]
+        self.f_std_si = env_config["Noise"]["f_std_si"]
+        self.t_std_si = env_config["Noise"]["t_std_si"]
+        self.pos_std_si = env_config["Noise"]["pos_std_si"]
+        self.rot_std_si = env_config["Noise"]["rot_std_si"]
+        self.f_std_dr = env_config["Noise"]["f_std_dr"]
+        self.t_std_dr = env_config["Noise"]["t_std_dr"]
+        self.pos_std_dr = env_config["Noise"]["pos_std_dr"]
+        self.rot_std_dr = env_config["Noise"]["rot_std_dr"]
 
         ############################
         
@@ -262,14 +274,22 @@ class Ur10Env(robot_custom_env.RobotEnv):
     def _get_obs(self):
         rot_mat = self.sim.data.get_body_xmat('gripper_dummy_heg')
         ft = self.sim.data.sensordata.copy()
+        ft[:3] += numpy.random.normal(self.f_mean, (self.f_std_si + self.f_std_dr), 3)
+        ft[3:] += numpy.random.normal(self.t_mean, (self.t_std_si + self.t_std_dr), 3)
 
         if self.start_flag:
             ft = numpy.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+            ft[:3] += numpy.random.normal(self.f_mean, (self.f_std_si + self.f_std_dr), 3)
+            ft[3:] += numpy.random.normal(self.t_mean, (self.t_std_si + self.t_std_dr), 3)
         self.start_flag = False
 
         x_pos = self.sim.data.get_body_xpos("gripper_dummy_heg")
+        x_pos += numpy.random.normal(self.pos_mean, (self.pos_std_si + self.pos_std_dr), 3)
         x_mat = self.sim.data.get_body_xmat("gripper_dummy_heg")
-        rpy = normalize_rad(rotations.mat2euler(x_mat))
+        rpy = normalize_rad(
+            rotations.mat2euler(x_mat)
+            + numpy.random.normal(self.rot_mean, (self.rot_std_si + self.rot_std_dr), 3)
+            )
 
         obs = numpy.concatenate([
             rot_mat.dot(x_pos-self.goal[:3]),
@@ -306,7 +326,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.success_rate = numpy.sum(self.results)/len(self.results)
         self.results.pop(0)
         self.results.append(0)
-        print("Episode: {} Success Rate : {}".format(self.episode,self.success_rate))
+        print("Episode: {} Success Rate: {} ".format(self.episode, self.success_rate))
         
         if self.save_data and self.episode > 0:
             

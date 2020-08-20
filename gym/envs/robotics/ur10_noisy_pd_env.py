@@ -7,8 +7,8 @@ import json
 
 from gym.envs.robotics import rotations, robot_custom_env, utils
 from gym.envs.robotics.ur10 import randomize
-
 from scipy.signal import lfilter, lfilter_zi, butter
+
 
 PROJECT_PATH = os.path.join(*[os.getenv("HOME"), "DRL_AI4RoMoCo"])
 MODEL_PATH = os.path.join(*[PROJECT_PATH, "code", "environment", "UR10"])

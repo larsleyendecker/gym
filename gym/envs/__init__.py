@@ -415,6 +415,17 @@ register(
     entry_point = 'gym.envs.robotics:Ur10HegGenesisEnv',
     max_episode_steps = 500,
 )
+register(
+    id="UR10HEG-v003",
+    entry_point = "gym.envs.robotics:Ur10HegNoisyPositionEnv",
+    max_episode_steps = 500,
+)
+register(
+    id="UR10HEG-v004",
+    entry_point = "gym.envs.robotics:Ur10HegNoisyForceEnv",
+    max_episode_steps = 500
+)
+
 #------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------
