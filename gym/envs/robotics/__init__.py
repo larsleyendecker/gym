@@ -22,7 +22,7 @@ from gym.envs.robotics.ur10.assemble import Ur10HegRelEnv
 from gym.envs.robotics.ur10.assemble import Ur10HegRelVaryEnv
 from gym.envs.robotics.ur10.assemble import Ur10HegCorrectiveEnv
 from gym.envs.robotics.ur10.assemble import Ur10HegCorrectiveVaryEnv
-from gym.envs.robotics.ur10.assemble import Ur10HegRandEnv #UR10HEG-v001
+from gym.envs.robotics.ur10.assemble import Ur10HegRandForceEnv #UR10HEG-v001
 from gym.envs.robotics.ur10.assemble import Ur10HegStaticEnv #UR10HEG-v000
 from gym.envs.robotics.ur10.assemble import Ur10HegGenesisEnv #UR10HEG-v002
 from gym.envs.robotics.ur10.assemble import Ur10HegNoisyPositionEnv #UR10HEG-v003

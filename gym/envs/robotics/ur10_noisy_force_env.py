@@ -17,8 +17,8 @@ SAVE_PATH = os.path.join(*[
     "code",
     "data",
     "TEST_SIM",
-    "UR10HEG-v004",
-    "Model12_FC_SN_R2_005"
+    "NoisyForceEnv",
+    "Model4"
     ])
 
 GOAL_PATH = os.path.join(*[
@@ -81,7 +81,8 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.sim_ctrl_q = self.initial_qpos                                         
         self.reward_type = env_config["reward_type"]                                
         self.ctrl_type = env_config["ctrl_type"]                            
-        self.n_substeps = env_config["n_substeps"]                                 
+        self.n_substeps = env_config["n_substeps"]      
+        self.action_rate = env_config["action_rate"]                           
         self.distance_threshold = env_config["Learning"]["distance_threshold"]
         self.cur_eps_threshold = env_config["Learning"]["cur_eps_threshold"]
         self.curriculum_learning = env_config["Learning"]["curriculum_learning"]
@@ -128,7 +129,8 @@ class Ur10Env(robot_custom_env.RobotEnv):
         super(Ur10Env, self).__init__(
             model_path=self.model_path, n_substeps=self.n_substeps,
             n_actions=self.n_actions, initial_qpos=self.initial_qpos, 
-            seed=self.SEED, success_reward=self.success_reward)
+            seed=self.SEED, success_reward=self.success_reward,
+            action_rate=self.action_rate)
 
     def set_force_for_q(self, q_ctrl, only_grav_comp=False):
         '''
@@ -366,6 +368,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.zi = [lfilter_zi(self.b, self.a) * (self.initial_qpos[i] + deviation_q[i]) for i in range(6)]
         self.qi_diff = 0
         self.last_target_q = self.initial_qpos + deviation_q
+        
         self.set_state(self.initial_qpos + deviation_q)
         self.sim.forward()
         self.sim.step()

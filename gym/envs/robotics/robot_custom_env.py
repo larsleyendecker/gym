@@ -35,7 +35,7 @@ def convert_observation_to_space(observation):
 
 
 class RobotEnv(gym.Env):
-    def __init__(self, model_path, initial_qpos, n_actions, n_substeps, seed, success_reward):
+    def __init__(self, model_path, initial_qpos, n_actions, n_substeps, seed, success_reward, action_rate):
         if model_path.startswith('/'):
             fullpath = model_path
         else:
@@ -52,7 +52,7 @@ class RobotEnv(gym.Env):
             'render.modes': ['human', 'rgb_array'],
             'video.frames_per_second': int(np.round(1.0 / self.dt))
         }
-
+        self.action_rate = action_rate
         self.seed(seed)
         self._env_setup(initial_qpos=initial_qpos)
         self.initial_state = copy.deepcopy(self.sim.get_state())
@@ -87,7 +87,7 @@ class RobotEnv(gym.Env):
 
     def step(self, action):
         action = np.clip(action, self.action_space.low, self.action_space.high)
-        for i in range(1):
+        for i in range(self.action_rate):
             self._set_action(action)
             self.sim.step()
         self._step_callback()

@@ -25,7 +25,7 @@ body_pos = np.array([2.19, 2.275, 0.95])
 body_quat = np.array([0.6427876, 0, 0, -0.7660444])
 
 
-ur_path = os.path.join(*[HOME_PATH, "DRL_SetBot-RearVentilation", "UR10"])
+ur_path = os.path.join(*[HOME_PATH, "DRL_AI4RoMoCo", "code", "environment", "UR10_Force_Randomized"])
 main_xml = os.path.join(*[ur_path, "ur10_assembly_setup_rand.xml"])
 
 robot_body_xml = os.path.join(*[ur_path, "ur10_heg", "ur10_body_heg_rand.xml"])

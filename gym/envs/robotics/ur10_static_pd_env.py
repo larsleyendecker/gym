@@ -17,8 +17,8 @@ SAVE_PATH = os.path.join(*[
     "code",
     "data",
     "TEST_SIM",
-    "UR10HEG-v000",
-    "Model10_FC_DL_R2_0075"
+    "StaticForceEnv",
+    "Model2"
     ])
 
 GOAL_PATH = os.path.join(*[
@@ -81,7 +81,8 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.sim_ctrl_q = self.initial_qpos                                         
         self.reward_type = env_config["reward_type"]                                
         self.ctrl_type = env_config["ctrl_type"]                            
-        self.n_substeps = env_config["n_substeps"]                                 
+        self.n_substeps = env_config["n_substeps"]   
+        self.action_rate = env_config["action_rate"]                              
         self.distance_threshold = env_config["Learning"]["distance_threshold"]
         self.cur_eps_threshold = env_config["Learning"]["cur_eps_threshold"]
         self.curriculum_learning = env_config["Learning"]["curriculum_learning"]
@@ -116,7 +117,8 @@ class Ur10Env(robot_custom_env.RobotEnv):
         super(Ur10Env, self).__init__(
             model_path=self.model_path, n_substeps=self.n_substeps,
             n_actions=self.n_actions, initial_qpos=self.initial_qpos, 
-            seed=self.SEED, success_reward=self.success_reward)
+            seed=self.SEED, success_reward=self.success_reward,
+            action_rate=self.action_rate)
 
     def set_force_for_q(self, q_ctrl, only_grav_comp=False):
         '''

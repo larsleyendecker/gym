@@ -10,6 +10,7 @@ from gym.envs.robotics import ur10_static_pd_env
 from gym.envs.robotics import ur10_static_env
 from gym.envs.robotics import ur10_noisy_position_env
 from gym.envs.robotics import ur10_noisy_force_env
+from gym.envs.robotics import ur10_rand_force_env
 
 # Ensure we get the path separator correct on windows
 PROJECT_PATH = os.path.join(*[os.getenv("HOME"), "DRL_AI4RoMoCo"])
@@ -105,6 +106,16 @@ class Ur10HegGenesisEnv(ur10_static_env.Ur10Env, utils.EzPickle):
 class Ur10HegRandEnv(ur10_noisy_pd_env.Ur10Env, utils.EzPickle):
     def __init__(self):
         ur10_noisy_pd_env.Ur10Env.__init__(self, RAND_FORCE_CONFIG_PATH)
+        utils.EzPickle.__init__(self)
+
+class Ur10HegRandForceEnv(ur10_rand_force_env.Ur10Env, utils.EzPickle):
+    def __init__(self):
+        ur10_rand_force_env.Ur10Env.__init__(
+            self, 
+            RAND_FORCE_CONFIG_PATH,
+            model_xml_path = os.path.join(*[PROJECT_PATH, "code", "environment", "UR10_Force_Randomized", "ur10_assembly_setup_rand_temp_0.xml"]),
+            worker_id = 1,
+            )
         utils.EzPickle.__init__(self)
 
 #UR10HEG-v000

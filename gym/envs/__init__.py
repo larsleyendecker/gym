@@ -407,7 +407,7 @@ register(
 
 register(
     id='UR10HEG-v001',
-    entry_point = 'gym.envs.robotics:Ur10HegRandEnv',
+    entry_point = 'gym.envs.robotics:Ur10HegRandForceEnv',
     max_episode_steps = 500,
 )
 register(
