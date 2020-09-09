@@ -16,9 +16,8 @@ SAVE_PATH = os.path.join(*[
     PROJECT_PATH, 
     "code", 
     "data", 
-    "TEST_SIM", 
-    "NoisyPositionEnv", 
-    "Model3"
+    "EVAL_SOURCESIM", 
+    "NoisyPositionEnv",
     ])
 GOAL_PATH = os.path.join(*[
     PROJECT_PATH, 
@@ -72,7 +71,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
             
         self.SEED = env_config["SEED"]
         self.run_info = env_config["info"]
-        self.results = list(numpy.zeros(10,).astype(int))
+        self.results = list() #list(numpy.zeros(10,).astype(int))
         self.R1 = env_config["Reward"]["R1"]
         self.R2 = env_config["Reward"]["R2"]
         self.success_reward = env_config["Reward"]["success_reward"]
@@ -96,18 +95,21 @@ class Ur10Env(robot_custom_env.RobotEnv):
 
         ########################
         # NOISE
-        self.f_mean = env_config["Noise"]["f_mean"]
-        self.t_mean = env_config["Noise"]["t_mean"]
-        self.pos_mean = env_config["Noise"]["pos_mean"]
-        self.rot_mean = env_config["Noise"]["rot_mean"]
+        self.f_mean_si = env_config["Noise"]["f_mean_si"]
+        self.t_mean_si = env_config["Noise"]["t_mean_si"]
+        self.pos_mean_si = env_config["Noise"]["pos_mean_si"]
+        self.rot_mean_si = env_config["Noise"]["rot_mean_si"]
         self.f_std_si = env_config["Noise"]["f_std_si"]
         self.t_std_si = env_config["Noise"]["t_std_si"]
         self.pos_std_si = env_config["Noise"]["pos_std_si"]
         self.rot_std_si = env_config["Noise"]["rot_std_si"]
-        self.f_std_dr = env_config["Noise"]["f_std_dr"]
-        self.t_std_dr = env_config["Noise"]["t_std_dr"]
-        self.pos_std_dr = env_config["Noise"]["pos_std_dr"]
-        self.rot_std_dr = env_config["Noise"]["rot_std_dr"]
+        self.dq_mean_si = env_config["Noise"]["dq_mean_si"]
+        self.dq_std_si = env_config["Noise"]["dq_std_si"]
+
+        #self.f_std_dr = env_config["Noise"]["f_std_dr"]
+        #self.t_std_dr = env_config["Noise"]["t_std_dr"]
+        #self.pos_std_dr = env_config["Noise"]["pos_std_dr"]
+        #self.rot_std_dr = env_config["Noise"]["rot_std_dr"]
         ########################
     
         super(Ur10Env, self).__init__(
@@ -128,6 +130,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
         rew = self.R1 * (-d) + self.R2 *(-f)
         if self.save_data:
             self.rewards.append(rew)
+        self.step_count += 1
         return rew
 
     def _step_callback(self):
@@ -206,6 +209,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
                 dx.reshape(6, 1)
 
             dq = self.get_dq(dx)
+            dq += numpy.random.uniform(self.dq_mean_si, self.dq_std_si,6)
             # print(sum(abs(sim.data.qpos-sim.data.ctrl)))
             for i in range(6):
                 self.sim.data.ctrl[i] += dq[i]
@@ -220,21 +224,21 @@ class Ur10Env(robot_custom_env.RobotEnv):
     def _get_obs(self):
         rot_mat = self.sim.data.get_body_xmat('gripper_dummy_heg')
         ft = self.sim.data.sensordata.copy()
-        ft[:3] += numpy.random.normal(self.f_mean, (self.f_std_si + self.f_std_dr), 3)
-        ft[3:] += numpy.random.normal(self.t_mean, (self.t_std_si + self.t_std_dr), 3)
+        ft[:3] += numpy.random.normal(self.f_mean_si, self.f_std_si, 3)
+        ft[3:] += numpy.random.normal(self.t_mean_si, self.t_std_si, 3)
 
         if self.start_flag:
             ft = numpy.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-            ft[:3] += numpy.random.normal(self.f_mean, (self.f_std_si + self.f_std_dr), 3)
-            ft[3:] += numpy.random.normal(self.t_mean, (self.t_std_si + self.t_std_dr), 3)
+            ft[:3] += numpy.random.normal(self.f_mean_si, self.f_std_si, 3)
+            ft[3:] += numpy.random.normal(self.t_mean_si, self.t_std_si, 3)
         self.start_flag = False
 
         x_pos = self.sim.data.get_body_xpos("gripper_dummy_heg")
-        x_pos += numpy.random.normal(self.pos_mean, (self.pos_std_si + self.pos_std_dr), 3)
+        x_pos += numpy.random.normal(self.pos_mean_si, self.pos_std_si, 3)
         x_mat = self.sim.data.get_body_xmat("gripper_dummy_heg")
         rpy = normalize_rad(
             rotations.mat2euler(x_mat)
-            + numpy.random.normal(self.rot_mean, (self.rot_std_si + self.rot_std_dr), 3)
+            + numpy.random.normal(self.rot_mean_si, self.rot_std_si, 3) * (numpy.pi/180)
             )
 
         obs = numpy.concatenate([
@@ -270,12 +274,19 @@ class Ur10Env(robot_custom_env.RobotEnv):
     def _reset_sim(self):
         # Tracking the first step to zero the ft-sensor
         self.start_flag = True
-        self.success_rate = numpy.sum(self.results)/len(self.results)
-        self.results.pop(0)
-        self.results.append(0)
-        print("Success Rate = ", self.success_rate)
+        if self.episode > 0:
+            self.success_rate = float(numpy.sum(self.results)/float(len(self.results)))
+            print("Episode: {} Success Rate: {} ".format(self.episode, self.success_rate))
+            if len(self.results) < 10:
+                self.results.append(0)
+            else:
+                self.results.pop(0)
+                self.results.append(0)
         
         if self.save_data and self.episode > 0:
+            if self.success_flag == 1:
+                self.rewards.append(self.success_reward)
+            self.reward_sum = numpy.sum(self.rewards)
             
             save_dict = {
                     #"observations" : self.obs,
@@ -284,19 +295,25 @@ class Ur10Env(robot_custom_env.RobotEnv):
                     #"poses" : self.poses
                     "fx" : self.fxs,
                     "fy" : self.fys,
-                    "fz" : self.fzs
+                    "fz" : self.fzs,
+                    "steps" : self.step_count,
+                    "success" : self.success_flag,
+                    "reward" : self.reward_sum
             }
             with open(os.path.join(*[SAVE_PATH, "episode_{}.json".format(self.episode)]), "w") as file:
                 json.dump(save_dict,file)
                 file.write('\n')
         
-            self.obs = []
-            self.fts = []
-            self.rewards = []
-            self.poses = []
-            self.fxs = []
-            self.fys = []
-            self.fzs = []
+            #self.obs = []
+            #self.fts = []
+            #self.rewards = []
+            #self.poses = []
+        self.fxs = []
+        self.fys = []
+        self.fzs = []
+        self.rewards = []
+        self.step_count = 0
+        self.success_flag = 0
         self.episode += 1
         
         #if not self.viewer is None:
@@ -340,22 +357,34 @@ class Ur10Env(robot_custom_env.RobotEnv):
         if self.curriculum_learning:
             if self.episode < self.cur_eps_threshold:
                 if d < self.initial_distance_threshold:
-                    self.results.pop()
-                    self.results.append(1)
+                    if len(self.results) == 0:
+                        self.results.append(1)
+                    else:
+                        self.results.pop()
+                        self.results.append(1)
+                    self.success_flag = 1
                     return True
                 else:
                     return False
             else:
                 if d < self.final_distance_threshold:
-                    self.results.pop()
-                    self.results.append(1)
+                    if len(self.results) == 0:
+                        self.results.append(1)
+                    else:
+                        self.results.pop()
+                        self.results.append(1)
+                    self.success_flag = 1
                     return True
                 else:
                     return False
         else:
             if d < self.distance_threshold:
-                self.results.pop()
-                self.results.append(1)
+                if len(self.results) == 0:
+                    self.results.append(1)
+                else:
+                    self.results.pop()
+                    self.results.append(1)
+                self.success_flag = 1
                 return True
             else:
                 return False

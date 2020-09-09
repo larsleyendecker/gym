@@ -27,3 +27,4 @@ from gym.envs.robotics.ur10.assemble import Ur10HegStaticEnv #UR10HEG-v000
 from gym.envs.robotics.ur10.assemble import Ur10HegGenesisEnv #UR10HEG-v002
 from gym.envs.robotics.ur10.assemble import Ur10HegNoisyPositionEnv #UR10HEG-v003
 from gym.envs.robotics.ur10.assemble import Ur10HegNoisyForceEnv #UR10HEG-v004
+from gym.envs.robotics.ur10.assemble import Ur10HegAutoRandForceEnv #UR10HEG-v005

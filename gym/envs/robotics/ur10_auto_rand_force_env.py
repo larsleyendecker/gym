@@ -4,29 +4,32 @@ import numpy
 import yaml
 import mujoco_py
 import json
+import datetime
 
 from gym.envs.robotics import rotations, robot_custom_env, utils
 from gym.envs.robotics.ur10 import randomize
 from scipy.signal import lfilter, lfilter_zi, butter
 
+config_file = "env_config_005.yml"
 
 PROJECT_PATH = os.path.join(*[os.getenv("HOME"), "DRL_AI4RoMoCo"])
 MODEL_PATH = os.path.join(*[PROJECT_PATH, "code", "environment", "UR10"])
-CONFIG_PATH = os.path.join(*[PROJECT_PATH, "code", "config", "environment"])
-SAVE_PATH = os.path.join(*[PROJECT_PATH, "code", "data", "sim_poses"])
+CONFIG_PATH = os.path.join(*[PROJECT_PATH, "code", "configs", "environment"])
+ADR_CONFIG_PATH = os.path.join(*[CONFIG_PATH, "ADR"])
+ADR_TRAIN_DIR = os.path.join(*[PROJECT_PATH,"code", "data", "ADR_TRAIN"])
 SAVE_PATH = os.path.join(*[
     PROJECT_PATH,
     "code",
     "data",
-    "EVAL_SOURCESIM",
-    "RandForceEnv_21",
+    "TEST_SIM",
+    "RandForceEnv",
+    "Model7"
     ])
 #GOAL_PATH = os.path.join(*[
 #    PROJECT_PATH,
 #    "code",
 #    "environment",
-#    "experiment_configs",
-#    "goal_ur10_simpheg_conf2.json"
+#    "experiment_configs",AUTO_CONFIG_PATH
 #])
 
 def goal_distance(obs, goal):
@@ -52,25 +55,51 @@ class Ur10Env(robot_custom_env.RobotEnv):
 
         with open(env_config) as cfg:
             env_config = yaml.load(cfg, Loader=yaml.FullLoader)
-            
+
+        yaml.dump(
+            env_config,
+            open(os.path.join(*[
+                ADR_CONFIG_PATH, 
+                "env_config_005_{}.yml".format(worker_id)
+                ]),
+            "w")
+        )
+
+        month = (datetime.datetime.now()).strftime("%m")
+        day = (datetime.datetime.now()).strftime("%d")
+        hour = (datetime.datetime.now()).strftime("%H")
+        minute = (datetime.datetime.now()).strftime("%M")
+        date_time = "{}-{}_{}-{}".format(month,day,hour, minute)
+
+        if not os.path.exists(os.path.join(*[
+            ADR_TRAIN_DIR, 
+            "ADR_{}".format(date_time)
+            ])):
+            os.makedirs(os.path.join(*[ADR_TRAIN_DIR, "ADR_{}".format(date_time)]))
+        self.LVL_SAVE_PATH = os.path.join(os.path.join(*[
+            ADR_TRAIN_DIR, 
+            "ADR_{}".format(date_time)
+            ]))
+
+
         if model_xml_path == None:
             self.model_path = env_config["model_xml_file"]
 
         self.save_data = env_config["Saving"]
         self.start_flag = True
         self.episode = 0
+        self.levels = dict()
         if self.save_data:
-            self.fts = []
-            self.fxs = []
-            self.fys = []
-            self.fzs = []
-            self.obs = []
-            self.rewards = []
-            self.poses = []
+            self.fts = list()
+            self.fxs = list()
+            self.fys = list()
+            self.fzs = list()
+            self.obs = list()
+            self.rewards = list()
+            self.poses = list()
         self.SEED = env_config["SEED"]
 
         # Environment Parameter
-        #self.model_path = os.path.join(*[MODEL_PATH,env_config["model_xml_file"]])  # Path to the environment xml file
         self.run_info = env_config["info"]
         self.results = list() #list(numpy.zeros(10,).astype(int))
         self.R1 = env_config["Reward"]["R1"]
@@ -124,7 +153,20 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.dq_mean_si = env_config["Noise"]["dq_mean_si"]
         self.dq_std_si = env_config["Noise"]["dq_std_si"]
 
+        self.f_corr = numpy.zeros(3)
+        self.t_corr = numpy.zeros(3)
+        self.pos_corr = numpy.zeros(3)
+        self.rot_corr = numpy.zeros(3)
+        self.dq_corr = numpy.zeros(6)
+
         # Domain Randomization Parameter
+
+        self.level = int(env_config["Learning"]["ADR"]["level"])
+        self.level_episodes = 0
+        self.lower_level_bound = env_config["Learning"]["ADR"]["lower_level_bound"]
+        self.upper_level_bound = env_config["Learning"]["ADR"]["upper_level_bound"]
+        self.level_episodes_bound = env_config["Learning"]["ADR"]["level_episodes_bound"]
+
         self.dq_var_dr_cor = env_config["Domain_Randomization"]["dq_var_dr_cor"]
         self.dq_var_dr_uncor = env_config["Domain_Randomization"]["dq_var_dr_uncor"]
         self.pos_var_dr_cor = env_config["Domain_Randomization"]["pos_var_dr_cor"]
@@ -136,11 +178,23 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.rot_var_dr_cor = env_config["Domain_Randomization"]["rot_var_dr_cor"]
         self.rot_var_dr_uncor = env_config["Domain_Randomization"]["rot_var_dr_uncor"]
 
-        self.f_corr = numpy.zeros(3)
-        self.t_corr = numpy.zeros(3)
-        self.pos_corr = numpy.zeros(3)
-        self.rot_corr = numpy.zeros(3)
-        self.dq_corr = numpy.zeros(6)
+        self.dq_cor_delta = env_config["ADR"]["dq_cor_delta"]
+        self.dq_uncor_delta = env_config["ADR"]["dq_uncor_delta"]
+        self.pos_cor_delta = env_config["ADR"]["pos_cor_delta"]
+        self.pos_uncor_delta = env_config["ADR"]["pos_uncor_delta"]
+        self.f_cor_delta = env_config["ADR"]["f_cor_delta"]
+        self.f_uncor_delta = env_config["ADR"]["f_uncor_delta"]
+        self.t_cor_delta = env_config["ADR"]["t_cor_delta"]
+        self.t_uncor_delta = env_config["ADR"]["t_uncor_delta"]
+        self.rot_cor_delta = env_config["ADR"]["rot_cor_delta"]
+        self.rot_uncor_delta = env_config["ADR"]["rot_uncor_delta"]
+        self.mass_delta = env_config["ADR"]["mass_delta"]
+        self.damp_delta = env_config["ADR"]["damp_delta"]
+        self.fr_delta = env_config["ADR"]["fr_delta"]
+        self.grav_x_y_delta = env_config["ADR"]["grav_x_y_delta"]
+        self.grav_z_delta = env_config["ADR"]["grav_z_delta"]
+        self.body_pos_delta = env_config["ADR"]["body_pos_delta"]
+        self.body_rot_delta = env_config["ADR"]["body_rot_delta"]
         
         self.randomize_kwargs = env_config["randomize_kwargs"]
 
@@ -274,7 +328,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
                 dx.reshape(6, 1)
 
             rot_mat = self.sim.data.get_body_xmat('gripper_dummy_heg')
-            dx_ = numpy.concatenate([rot_mat.dot(dx[:3]), rot_mat.dot(dx[3:])])  ## transform to right coordinate system
+            dx_ = numpy.concatenate([rot_mat.dot(dx[:3]), rot_mat.dot(dx[3:])])  ## transform to right coordinate system 
             #dx_[2]+= 1
             dq = self.get_dq(dx_)
             dq += numpy.random.normal(self.dq_mean_si, self.dq_std_si, 6)
@@ -318,7 +372,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
         x_pos += self.pos_corr
         x_mat = self.sim.data.get_body_xmat("gripper_dummy_heg")
         #print(rotations.mat2euler(x_mat))
-        rpy = normalize_rad(rotations.mat2euler(x_mat) + numpy.random.normal(self.rot_mean_si, self.rot_std_si, 3) * (numpy.pi/180) + numpy.random.uniform(-self.rot_var_dr_uncor, self.rot_var_dr_uncor, 3) * (numpy.pi/180)+ self.rot_corr * (numpy.pi/180))
+        rpy = normalize_rad(rotations.mat2euler(x_mat) + numpy.random.normal(self.rot_mean_si, self.rot_std_si, 3) * (numpy.pi/180) + numpy.random.uniform(-self.rot_var_dr_uncor, self.rot_var_dr_uncor, 3) * (numpy.pi/180) + self.rot_corr * (numpy.pi/180))
 
         obs = numpy.concatenate([
             rot_mat.dot(x_pos-self.goal[:3]),
@@ -351,16 +405,30 @@ class Ur10Env(robot_custom_env.RobotEnv):
         pass
 
     def _reset_sim(self):
-        # Tracking the first step to zero the ft-sensor
+        # Tracking the first step to zero the ft-sensor0
         self.start_flag = True
         if self.episode > 0:
             self.success_rate = float(numpy.sum(self.results)/float(len(self.results)))
-            print("Episode: {} Success Rate: {} ".format(self.episode, self.success_rate))
+            self.level, self.info = self.level_change(self.success_rate, self.level)
+
+            print(" | Worker: {} | Episode: {} | Success Rate: {} | Level: {} |".format(
+                self.worker_id, self.episode, 
+                self.success_rate, str(self.level).zfill(3))
+                )
+
             if len(self.results) < 10:
                 self.results.append(0)
             else:
                 self.results.pop(0)
                 self.results.append(0)
+        
+        if self.episode > 0 and self.episode % 10 == 0:
+            self.levels["{}".format(self.episode)]=self.level
+            with open(os.path.join(*[
+                self.LVL_SAVE_PATH, 
+                "worker_{}.json".format(self.worker_id)
+                ]), "w+") as outfile:
+                json.dump(self.levels, outfile)
         
         if self.save_data and self.episode > 0:
             if self.success_flag == 1:
@@ -377,9 +445,13 @@ class Ur10Env(robot_custom_env.RobotEnv):
                     "fz" : self.fzs,
                     "steps" : self.step_count,
                     "success" : self.success_flag,
-                    "reward" : self.reward_sum
+                    "reward" : self.reward_sum,
+                    "level" : self.level,
             }
-            with open(os.path.join(*[SAVE_PATH, "episode_{}.json".format(self.episode)]), "w") as file:
+            with open(os.path.join(*[
+                SAVE_PATH, 
+                "episode_{}.json".format(self.episode)
+                ]), "w") as file:
                 json.dump(save_dict,file)
                 file.write('\n')
         
@@ -387,10 +459,10 @@ class Ur10Env(robot_custom_env.RobotEnv):
             #self.fts = []
             #self.rewards = []
             #self.poses = []
-        self.fxs = []
-        self.fys = []
-        self.fzs = []
-        self.rewards = []
+        self.fxs = list()
+        self.fys = list()
+        self.fzs = list()
+        self.rewards = list()
         self.step_count = 0
         self.success_flag = 0
         self.episode += 1
@@ -401,12 +473,13 @@ class Ur10Env(robot_custom_env.RobotEnv):
         #    self.ft_drift_val = numpy.random.uniform(-self.ft_drift_range, self.ft_drift_range)
         #self.pos_drift_val = numpy.random.uniform(-self.pos_drift_range, self.pos_drift_range)
 
-        # Correlated noise
+        #Correlated Noise
         self.dq_corr = numpy.random.uniform(-self.dq_var_dr_cor, self.dq_var_dr_cor, 6)
         self.pos_corr = numpy.random.uniform(-self.pos_var_dr_cor, self.pos_var_dr_cor, 3)
         self.rot_corr = numpy.random.uniform(-self.rot_var_dr_cor, self.rot_var_dr_cor, 3)
         self.f_corr = numpy.random.uniform(-self.f_var_dr_cor, self.f_var_dr_cor, 3)
         self.t_corr = numpy.random.uniform(-self.t_var_dr_cor, self.t_var_dr_cor, 3)
+
 
         del self.sim
         self.offset = randomize.randomize_ur10_xml(worker_id=self.worker_id, **self.randomize_kwargs)
@@ -507,3 +580,107 @@ class Ur10Env(robot_custom_env.RobotEnv):
 
     def render(self, mode='human', width=500, height=500):
         return super(Ur10Env, self).render(mode, width, height)
+
+
+    def level_change(self, success_rate, level):
+        '''Changes ADR level depending on the current success_rate'''
+
+        if success_rate > self.upper_level_bound and self.level_episodes >= self.level_episodes_bound:
+            level += 1
+            with open(os.path.join(*[ADR_CONFIG_PATH, "env_config_005_{}.yml".format(self.worker_id)])) as infile:
+                last_config = yaml.load(infile, Loader=yaml.FullLoader)
+                next_config = last_config
+
+            next_config["Learning"]["ADR"]["level"] = level
+
+            next_config["randomize_kwargs"]["var_mass"] = self.randomize_kwargs["var_mass"] + self.mass_delta
+            next_config["randomize_kwargs"]["var_damp"] = self.randomize_kwargs["var_damp"] + self.damp_delta
+            next_config["randomize_kwargs"]["var_fr"] = self.randomize_kwargs["var_fr"] + self.fr_delta
+            next_config["randomize_kwargs"]["var_grav_x_y"] = self.randomize_kwargs["var_grav_x_y"] + self.grav_x_y_delta
+            next_config["randomize_kwargs"]["var_grav_z"] = self.randomize_kwargs["var_grav_z"] + self.grav_z_delta
+            next_config["randomize_kwargs"]["var_body_pos"] = self.randomize_kwargs["var_body_pos"] + self.body_pos_delta
+            next_config["randomize_kwargs"]["var_body_rot"] = self.randomize_kwargs["var_body_rot"] + self.body_rot_delta
+
+            next_config["Domain_Randomization"]["dq_var_dr_cor"] = self.dq_var_dr_cor + self.dq_cor_delta
+            next_config["Domain_Randomization"]["dq_var_dr_uncor"] = self.dq_var_dr_uncor + self.dq_uncor_delta
+            next_config["Domain_Randomization"]["pos_var_dr_cor"] = self.pos_var_dr_cor + self.pos_cor_delta
+            next_config["Domain_Randomization"]["pos_var_dr_uncor"] = self.pos_var_dr_uncor + self.pos_uncor_delta
+            next_config["Domain_Randomization"]["f_var_dr_cor"] = self.f_var_dr_cor + self.f_cor_delta
+            next_config["Domain_Randomization"]["f_var_dr_uncor"] = self.f_var_dr_uncor + self.f_uncor_delta
+            next_config["Domain_Randomization"]["t_var_dr_cor"] = self.t_var_dr_cor + self.t_cor_delta
+            next_config["Domain_Randomization"]["t_var_dr_uncor"] = self.t_var_dr_uncor + self.t_uncor_delta
+            next_config["Domain_Randomization"]["rot_var_dr_cor"] = self.rot_var_dr_cor + self.rot_cor_delta
+            next_config["Domain_Randomization"]["rot_var_dr_uncor"] = self.rot_var_dr_uncor + self.rot_uncor_delta
+        
+            self.randomize_kwargs = next_config["randomize_kwargs"]
+            
+            self. dq_var_dr_cor = next_config["Domain_Randomization"]["dq_var_dr_cor"]
+            self.dq_var_dr_uncor = next_config["Domain_Randomization"]["dq_var_dr_uncor"]
+            self.pos_var_dr_cor = next_config["Domain_Randomization"]["pos_var_dr_cor"]
+            self.pos_var_dr_uncor = next_config["Domain_Randomization"]["pos_var_dr_uncor"]
+            self.f_var_dr_cor = next_config["Domain_Randomization"]["f_var_dr_cor"]
+            self.f_var_dr_uncor = next_config["Domain_Randomization"]["f_var_dr_uncor"]
+            self.t_var_dr_cor = next_config["Domain_Randomization"]["t_var_dr_cor"]
+            self.t_var_dr_uncor = next_config["Domain_Randomization"]["t_var_dr_uncor"]
+            self.rot_var_dr_cor = next_config["Domain_Randomization"]["rot_var_dr_cor"]
+            self.rot_var_dr_uncor = next_config["Domain_Randomization"]["rot_var_dr_uncor"]
+
+            with open(os.path.join(*[ADR_CONFIG_PATH, "env_config_005_{}.yml".format(self.worker_id)]), "w") as outfile:
+                yaml.dump(next_config, outfile)
+                
+            self.level_episodes = 0
+            info = "Level up to: {}".format(level)
+            return level, info
+                
+        elif success_rate < self.lower_level_bound and level > 0 and self.level_episodes >= self.level_episodes_bound:
+            level -= 1
+            with open(os.path.join(*[ADR_CONFIG_PATH, "env_config_005_{}.yml".format(self.worker_id)])) as infile:
+                last_config = yaml.load(infile, Loader=yaml.FullLoader)
+                next_config = last_config
+
+            next_config["Learning"]["ADR"]["level"] = level
+            
+            next_config["randomize_kwargs"]["var_mass"] = self.randomize_kwargs["var_mass"] - self.mass_delta
+            next_config["randomize_kwargs"]["var_damp"] = self.randomize_kwargs["var_damp"] - self.damp_delta
+            next_config["randomize_kwargs"]["var_fr"] = self.randomize_kwargs["var_fr"] - self.fr_delta
+            next_config["randomize_kwargs"]["var_grav_x_y"] = self.randomize_kwargs["var_grav_x_y"] - self.grav_x_y_delta
+            next_config["randomize_kwargs"]["var_grav_z"] = self.randomize_kwargs["var_grav_z"] - self.grav_z_delta
+            next_config["randomize_kwargs"]["var_body_pos"] = self.randomize_kwargs["var_body_pos"] - self.body_pos_delta
+            next_config["randomize_kwargs"]["var_body_rot"] = self.randomize_kwargs["var_body_rot"] - self.body_rot_delta
+
+            next_config["Domain_Randomization"]["dq_var_dr_cor"] = self.dq_var_dr_cor - self.dq_cor_delta
+            next_config["Domain_Randomization"]["dq_var_dr_uncor"] = self.dq_var_dr_uncor - self.dq_uncor_delta
+            next_config["Domain_Randomization"]["pos_var_dr_cor"] = self.pos_var_dr_cor - self.pos_cor_delta
+            next_config["Domain_Randomization"]["pos_var_dr_uncor"] = self.pos_var_dr_uncor - self.pos_uncor_delta
+            next_config["Domain_Randomization"]["f_var_dr_cor"] = self.f_var_dr_cor - self.f_cor_delta
+            next_config["Domain_Randomization"]["f_var_dr_uncor"] = self.f_var_dr_uncor - self.f_uncor_delta
+            next_config["Domain_Randomization"]["t_var_dr_cor"] = self.t_var_dr_cor - self.t_cor_delta
+            next_config["Domain_Randomization"]["t_var_dr_uncor"] = self.t_var_dr_uncor - self.t_uncor_delta
+            next_config["Domain_Randomization"]["rot_var_dr_cor"] = self.rot_var_dr_cor - self.rot_cor_delta
+            next_config["Domain_Randomization"]["rot_var_dr_uncor"] = self.rot_var_dr_uncor - self.rot_uncor_delta
+        
+            self.randomize_kwargs = next_config["randomize_kwargs"]
+            
+            self. dq_var_dr_cor = next_config["Domain_Randomization"]["dq_var_dr_cor"]
+            self.dq_var_dr_uncor = next_config["Domain_Randomization"]["dq_var_dr_uncor"]
+            self.pos_var_dr_cor = next_config["Domain_Randomization"]["pos_var_dr_cor"]
+            self.pos_var_dr_uncor = next_config["Domain_Randomization"]["pos_var_dr_uncor"]
+            self.f_var_dr_cor = next_config["Domain_Randomization"]["f_var_dr_cor"]
+            self.f_var_dr_uncor = next_config["Domain_Randomization"]["f_var_dr_uncor"]
+            self.t_var_dr_cor = next_config["Domain_Randomization"]["t_var_dr_cor"]
+            self.t_var_dr_uncor = next_config["Domain_Randomization"]["t_var_dr_uncor"]
+            self.rot_var_dr_cor = next_config["Domain_Randomization"]["rot_var_dr_cor"]
+            self.rot_var_dr_uncor = next_config["Domain_Randomization"]["rot_var_dr_uncor"]
+        
+            with open(os.path.join(*[ADR_CONFIG_PATH, "env_config_005_{}.yml".format(self.worker_id)]), "w") as outfile:
+                yaml.dump(next_config, outfile)
+            
+            self.level_episodes = 0
+            info = "Level down to: {}".format(level)
+            return level, info
+        
+        else:
+            level = level
+            self.level_episodes += 1
+            info = "Same Level at: {}".format(level)
+            return level, info

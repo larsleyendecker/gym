@@ -6,11 +6,12 @@ from gym.envs.robotics import ur10_rel_env
 from gym.envs.robotics import ur10_rel_simpheg_env
 from gym.envs.robotics import ur10_corrective_env
 from gym.envs.robotics import ur10_noisy_pd_env
-from gym.envs.robotics import ur10_static_pd_env
-from gym.envs.robotics import ur10_static_env
+from gym.envs.robotics import ur10_static_force_env
+from gym.envs.robotics import ur10_static_position_env
 from gym.envs.robotics import ur10_noisy_position_env
 from gym.envs.robotics import ur10_noisy_force_env
 from gym.envs.robotics import ur10_rand_force_env
+from gym.envs.robotics import ur10_auto_rand_force_env
 
 # Ensure we get the path separator correct on windows
 PROJECT_PATH = os.path.join(*[os.getenv("HOME"), "DRL_AI4RoMoCo"])
@@ -29,11 +30,13 @@ noisy_position_config_file = "env_config_003.yml"
 static_force_config_file = "env_config_000.yml"
 noisy_force_config_file="env_config_004.yml"
 rand_force_config_file = "env_config_001.yml"
+auto_rand_force_config_file = "env_config_005.yml"
 STATIC_POSITION_CONFIG_PATH = os.path.join(*[PROJECT_PATH,"code", "configs", "environment", static_position_config_file])
 NOISY_POSITION_CONFIG_PATH = os.path.join(*[PROJECT_PATH,"code", "configs", "environment", noisy_position_config_file])
 STATIC_FORCE_CONFIG_PATH = os.path.join(*[PROJECT_PATH,"code", "configs", "environment", static_force_config_file])
 NOISY_FORCE_CONFIG_PATH = os.path.join(*[PROJECT_PATH,"code", "configs", "environment", noisy_force_config_file])
 RAND_FORCE_CONFIG_PATH = os.path.join(*[PROJECT_PATH,"code", "configs", "environment", rand_force_config_file])
+AUTO_RAND_FORCE_CONFIG_PATH = os.path.join(*[PROJECT_PATH,"code", "configs", "environment", auto_rand_force_config_file])
 
 class Ur10HegEnv(ur10_env.Ur10Env, utils.EzPickle):
     def __init__(self, reward_type='dense'):
@@ -102,12 +105,6 @@ class Ur10HegGenesisEnv(ur10_static_env.Ur10Env, utils.EzPickle):
 ############ Using config files ################
 ################################################
 
-# UR10HEG-v001
-class Ur10HegRandEnv(ur10_noisy_pd_env.Ur10Env, utils.EzPickle):
-    def __init__(self):
-        ur10_noisy_pd_env.Ur10Env.__init__(self, RAND_FORCE_CONFIG_PATH)
-        utils.EzPickle.__init__(self)
-
 class Ur10HegRandForceEnv(ur10_rand_force_env.Ur10Env, utils.EzPickle):
     def __init__(self):
         ur10_rand_force_env.Ur10Env.__init__(
@@ -118,15 +115,21 @@ class Ur10HegRandForceEnv(ur10_rand_force_env.Ur10Env, utils.EzPickle):
             )
         utils.EzPickle.__init__(self)
 
-#UR10HEG-v000
-class Ur10HegStaticEnv(ur10_static_pd_env.Ur10Env, utils.EzPickle):
+# UR10HEG-v001
+class Ur10HegRandForceEnv(ur10_rand_force_env.Ur10Env, utils.EzPickle):
     def __init__(self):
-        ur10_static_pd_env.Ur10Env.__init__(self, STATIC_FORCE_CONFIG_PATH)
+        ur10_rand_force_env.Ur10Env.__init__(self, RAND_FORCE_CONFIG_PATH)
+        utils.EzPickle.__init__(self)
+
+#UR10HEG-v000
+class Ur10HegStaticEnv(ur10_static_force_env.Ur10Env, utils.EzPickle):
+    def __init__(self):
+        ur10_static_force_env.Ur10Env.__init__(self, STATIC_FORCE_CONFIG_PATH)
         utils.EzPickle.__init__(self)
 #UR10HEG-v002
-class Ur10HegGenesisEnv(ur10_static_env.Ur10Env, utils.EzPickle):
+class Ur10HegGenesisEnv(ur10_static_position_env.Ur10Env, utils.EzPickle):
     def __init__(self):
-        ur10_static_env.Ur10Env.__init__(self, STATIC_POSITION_CONFIG_PATH)
+        ur10_static_position_env.Ur10Env.__init__(self, STATIC_POSITION_CONFIG_PATH)
         utils.EzPickle.__init__(self)
 
 #UR10HEG-v003
@@ -139,4 +142,10 @@ class Ur10HegNoisyPositionEnv(ur10_noisy_position_env.Ur10Env, utils.EzPickle):
 class Ur10HegNoisyForceEnv(ur10_noisy_force_env.Ur10Env, utils.EzPickle):
     def __init__(self):
         ur10_noisy_force_env.Ur10Env.__init__(self, NOISY_FORCE_CONFIG_PATH)
+        utils.EzPickle.__init__(self)
+
+# UR10HEG-v005
+class Ur10HegAutoRandForceEnv(ur10_auto_rand_force_env.Ur10Env, utils.EzPickle):
+    def __init__(self):
+        ur10_auto_rand_force_env.Ur10Env.__init__(self, AUTO_RAND_FORCE_CONFIG_PATH)
         utils.EzPickle.__init__(self)

@@ -1,41 +1,44 @@
 import os
+import pandas
 import numpy
 import yaml
-import pandas
 import mujoco_py
 import json
+import datetime
+
 from gym.envs.robotics import rotations, robot_custom_env, utils
 from gym.envs.robotics.ur10 import randomize
 from scipy.signal import lfilter, lfilter_zi, butter
-#from utils.saving import NumpyEncoder
+
+config_file = "env_config_005.yml"
 
 PROJECT_PATH = os.path.join(*[os.getenv("HOME"), "DRL_AI4RoMoCo"])
-MODEL_PATH = os.path.join(*[PROJECT_PATH, "code", "environment", "UR10_Force"])
-CONFIG_PATH = os.path.join(*[PROJECT_PATH, "code", "config", "environment"])
+MODEL_PATH = os.path.join(*[PROJECT_PATH, "code", "environment", "UR10"])
+CONFIG_PATH = os.path.join(*[PROJECT_PATH, "code", "configs", "environment"])
+ADR_CONFIG_PATH = os.path.join(*[CONFIG_PATH, "ADR"])
+ADR_TRAIN_DIR = os.path.join(*[PROJECT_PATH,"code", "data", "ADR_TRAIN"])
 SAVE_PATH = os.path.join(*[
     PROJECT_PATH,
     "code",
     "data",
-    "EVAL_SOURCESIM",
-    "NoisyForceEnv",
+    "TEST_SIM",
+    "RandForceEnv",
+    "Model7"
     ])
-
-GOAL_PATH = os.path.join(*[
-    PROJECT_PATH,
-    "code",
-    "environment",
-    "experiment_configs",
-    "goal_ur10_simpheg_conf2.json"
-])
+#GOAL_PATH = os.path.join(*[
+#    PROJECT_PATH,
+#    "code",
+#    "environment",
+#    "experiment_configs",AUTO_CONFIG_PATH
+#])
 
 def goal_distance(obs, goal):
-    '''Computation of the distance between gripper and goal'''
     obs = obs[:6]
     assert obs.shape == goal.shape
     return numpy.linalg.norm(obs*numpy.array([1, 1, 1, 0.3, 0.3, 0.3]), axis=-1)
 
+
 def normalize_rad(angles):
-    '''Normalizing Euler angles'''
     angles = numpy.array(angles)
     angles = angles % (2*numpy.pi)
     angles = (angles + 2*numpy.pi) % (2*numpy.pi)
@@ -44,55 +47,81 @@ def normalize_rad(angles):
             angles[i] -= 2*numpy.pi
     return angles
 
-class NumpyEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, numpy.ndarray):
-            return obj.tolist()
-        return json.JSONEncoder.default(self, obj)
 
 class Ur10Env(robot_custom_env.RobotEnv):
     """Superclass for all Ur10 environments."""
 
-    def __init__(self, env_config):
+    def __init__(self, env_config, model_xml_path, worker_id):
 
         with open(env_config) as cfg:
             env_config = yaml.load(cfg, Loader=yaml.FullLoader)
 
+        yaml.dump(
+            env_config,
+            open(os.path.join(*[
+                ADR_CONFIG_PATH, 
+                "env_config_005_{}.yml".format(worker_id)
+                ]),
+            "w")
+        )
+
+        month = (datetime.datetime.now()).strftime("%m")
+        day = (datetime.datetime.now()).strftime("%d")
+        hour = (datetime.datetime.now()).strftime("%H")
+        minute = (datetime.datetime.now()).strftime("%M")
+        date_time = "{}-{}_{}-{}".format(month,day,hour, minute)
+
+        if not os.path.exists(os.path.join(*[
+            ADR_TRAIN_DIR, 
+            "ADR_{}".format(date_time)
+            ])):
+            os.makedirs(os.path.join(*[ADR_TRAIN_DIR, "ADR_{}".format(date_time)]))
+        self.LVL_SAVE_PATH = os.path.join(os.path.join(*[
+            ADR_TRAIN_DIR, 
+            "ADR_{}".format(date_time)
+            ]))
+
+
+        if model_xml_path == None:
+            self.model_path = env_config["model_xml_file"]
+
         self.save_data = env_config["Saving"]
         self.start_flag = True
         self.episode = 0
+        self.levels = dict()
         if self.save_data:
-            self.fts = []
-            self.fxs = []
-            self.fys = []
-            self.fzs = []
-            self.obs = []
-            self.rewards = []
-            self.poses = []
+            self.fts = list()
+            self.fxs = list()
+            self.fys = list()
+            self.fzs = list()
+            self.obs = list()
+            self.rewards = list()
+            self.poses = list()
         self.SEED = env_config["SEED"]
+
+        # Environment Parameter
         self.run_info = env_config["info"]
         self.results = list() #list(numpy.zeros(10,).astype(int))
         self.R1 = env_config["Reward"]["R1"]
         self.R2 = env_config["Reward"]["R2"]
         self.success_reward = env_config["Reward"]["success_reward"]
-        self.model_path = os.path.join(*[MODEL_PATH,env_config["model_xml_file"]])
-        self.initial_qpos = numpy.array(env_config["initial_qpos"])           
+        self.model_path = model_xml_path
+        self.initial_qpos = numpy.array(env_config["initial_qpos"])                 # An array of values that define the initial configuration)
         self.sim_ctrl_q = self.initial_qpos                                         
-        self.reward_type = env_config["reward_type"]                                
+        self.reward_type = env_config["reward_type"]                                # The reward type i.e. sparse or dense
         self.ctrl_type = env_config["ctrl_type"]                            
-        self.n_substeps = env_config["n_substeps"]      
-        self.action_rate = env_config["action_rate"]                           
+        self.n_substeps = env_config["n_substeps"]  
+        self.action_rate = env_config["action_rate"]                                # Number of substeps the simulation runs on every call to step
         self.distance_threshold = env_config["Learning"]["distance_threshold"]
         self.cur_eps_threshold = env_config["Learning"]["cur_eps_threshold"]
         self.curriculum_learning = env_config["Learning"]["curriculum_learning"]
         self.initial_distance_threshold = env_config["Learning"]["initial_distance_threshold"]
-        self.final_distance_threshold = env_config["Learning"]["final_distance_threshold"]
+        self.final_distance_threshold = env_config["Learning"]["final_distance_threshold"]               # The threshold after which a goal is considered achieved
         self.fail_threshold = env_config["Learning"]["fail_threshold"]                          
         self.n_actions = env_config["n_actions"]
         self.corrective = env_config["corrective"]
         self.vary = env_config["vary"]
         self.dx_max = env_config["dx_max"]
-        self.only_grav_comp = True
 
         # Controller Parameter
         self.K = numpy.array(env_config["controller"]["K"])
@@ -109,7 +138,10 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.zi = [lfilter_zi(b,a) * self.initial_qpos[i] for i in range(6)]
         self.qi_diff = env_config["controller"]["qi_diff"]
         self.last_target_q = self.initial_qpos.copy()
+        self.only_grav_comp = True
 
+        ########################
+        # NOISE
         self.f_mean_si = env_config["Noise"]["f_mean_si"]
         self.t_mean_si = env_config["Noise"]["t_mean_si"]
         self.pos_mean_si = env_config["Noise"]["pos_mean_si"]
@@ -120,25 +152,35 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.rot_std_si = env_config["Noise"]["rot_std_si"]
         self.dq_mean_si = env_config["Noise"]["dq_mean_si"]
         self.dq_std_si = env_config["Noise"]["dq_std_si"]
-        
-        #self.f_std_dr = env_config["Noise"]["f_std_dr"]
-        #self.t_std_dr = env_config["Noise"]["t_std_dr"]
-        #self.pos_std_dr = env_config["Noise"]["pos_std_dr"]
-        #self.rot_std_dr = env_config["Noise"]["rot_std_dr"]
 
-        ############################
-        
+        # Domain Randomization Parameter
+
+        self.level = int(env_config["Learning"]["ADR"]["level"])
+        self.level_episodes = 0
+        self.lower_level_bound = env_config["Learning"]["ADR"]["lower_level_bound"]
+        self.upper_level_bound = env_config["Learning"]["ADR"]["upper_level_bound"]
+        self.level_episodes_bound = env_config["Learning"]["ADR"]["level_episodes_bound"]
+
+        self.dq_var_dr = env_config["Domain_Randomization"]["dq_var_dr"]
+        self.pos_var_dr = env_config["Domain_Randomization"]["pos_var_dr"]
+        self.f_var_dr = env_config["Domain_Randomization"]["f_var_dr"]
+        self.t_var_dr = env_config["Domain_Randomization"]["t_var_dr"]
+        self.rot_var_dr = env_config["Domain_Randomization"]["rot_var_dr"]
+        self.randomize_kwargs = env_config["randomize_kwargs"]
+
+        self.offset = randomize.randomize_ur10_xml()
+        self.worker_id = worker_id
+
+        ##########################
+
         super(Ur10Env, self).__init__(
             model_path=self.model_path, n_substeps=self.n_substeps,
             n_actions=self.n_actions, initial_qpos=self.initial_qpos, 
-            seed=self.SEED, success_reward=self.success_reward,
+            seed=self.SEED, success_reward= self.success_reward,
             action_rate=self.action_rate)
+        
 
     def set_force_for_q(self, q_ctrl, only_grav_comp=False):
-        '''
-           Takes positional joint space ctrl signal from set_action and coverts it
-           into forces for force control (Not required for position control)
-        '''
         q_ctrl = q_ctrl.reshape(6, )
 
         self.ctrl_buffer[1:] = self.ctrl_buffer[:3].copy()
@@ -168,6 +210,17 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.sim_ctrl_q = q_ctrl
         return self.sim.data.ctrl[:].copy()
 
+    #def set_force_for_q(self, q, only_grav_comp=False):
+    #    self.sim.data.ctrl[:] = self.sim.data.qfrc_bias  # + sim.data.qfrc_bias*0.01*numpy.random.randn(6,)
+    #    if not only_grav_comp:
+    #        self.sim.data.ctrl[:] += numpy.clip(self.p * (q - self.sim.data.qpos) + self.d * (0 - self.sim.data.qvel), -self.max_T, self.max_T)
+    #    self.sim_ctrl_q = q
+    #    return self.sim.data.ctrl[:].copy()
+
+    def activate_noise(self):
+        self.vary=True
+        print('noise has been activated.')
+
     def compute_reward(self, obs, goal, info):
         d = goal_distance(obs,goal)
         f = numpy.absolute(obs[7])
@@ -179,33 +232,29 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.step_count += 1
         return rew
 
+    # RobotEnv methods
+    # ----------------------------
+
     def _step_callback(self):
-        pass
-        
+        a = 0
+        # not implemented
     def set_state(self, qpos):
         old_state = self.sim.get_state()
-        new_state = mujoco_py.MjSimState(
-            old_state.time, 
-            qpos, 
-            old_state.qvel, 
-            old_state.act, 
-            old_state.udd_state)
+        new_state = mujoco_py.MjSimState(old_state.time, qpos, old_state.qvel,
+                                         old_state.act, old_state.udd_state)
         self.sim.set_state(new_state)
         self.sim.forward()
 
     def _set_action(self, action):
-        '''Interface to the DRL agent: the agent outputs a positional control signal
-        based on the current position q. _set_action takes this positional action
-        '''
+
         assert action.shape == (6,)
-        # ensure that we don't change the action outside of this scope
-        action = action.copy()
+        action = action.copy()  # ensure that we don't change the action outside of this scope
+
         deviation = sum(abs(self.sim.data.qpos - self.sim_ctrl_q))
-        
-        # reset control to current position if deviation too high
-        if  deviation > 0.35:
+        # print(deviation )
+        if  deviation > 0.35:  # reset control to current position if deviation too high
             self.set_force_for_q(self.sim.data.qpos)
-            print('deviation compensated')
+            #print('deviation compensated')
 
         if self.ctrl_type == "joint":
             action *= 0.05  # limit maximum change in position
@@ -215,30 +264,23 @@ class Ur10Env(robot_custom_env.RobotEnv):
             dx = action.reshape(6, )
 
             max_limit = self.dx_max
-            '''
-            # limitation of operation space, 
-            # we only allow small rotations adjustments in x and z directions, 
-            # moving in y direction
-            '''
-            x_now = numpy.concatenate(
-                (self.sim.data.get_body_xpos("gripper_dummy_heg"),
-                self.sim.data.get_body_xquat("gripper_dummy_heg"))
-                )
+            # limitation of operation space, we only allow small rotations adjustments in x and z directions, moving in y direction
+            x_now = numpy.concatenate((self.sim.data.get_body_xpos("gripper_dummy_heg"), self.sim.data.get_body_xquat("gripper_dummy_heg")))
             x_then = x_now[:3] + dx[:3]*max_limit
 
             #diff_now = numpy.array(x_now - self.init_x).reshape(7,)
             diff_then = numpy.array(x_then[:3] - self.init_x[:3])
-            
-            #Default
-            #barriers_min = numpy.array([-0.2, -0.2,   -0.2])
-            #barriers_max = numpy.array([0.2,  0.4, 0.2])
-            #These barriers do the operation space limitation 
-            # [x_range, y_range, z_range]
+
             barriers_min = numpy.array([-0.4, -0.8,   -0.4])
             barriers_max = numpy.array([0.4,  0.8, 0.4])
 
-
-
+            #for i in range(3):
+            #    if (barriers_min[i] < diff_then[i] < barriers_max[i]):
+            #    dx[i] = dx[i] * max_limit
+            #    elif barriers_min[i] > diff_then[i]:
+            #        dx[i] = + max_limit
+            #    elif barriers_max[i] < diff_then[i]:
+            #        dx[i] = - max_limit
             for i in range(6):
                 dx[i] = dx[i] * max_limit
 
@@ -256,20 +298,16 @@ class Ur10Env(robot_custom_env.RobotEnv):
                 dx.reshape(6, 1)
 
             rot_mat = self.sim.data.get_body_xmat('gripper_dummy_heg')
-            ## transform to right coordinate system
-            dx_ = numpy.concatenate([rot_mat.dot(dx[:3]), rot_mat.dot(dx[3:])]) 
+            dx_ = numpy.concatenate([rot_mat.dot(dx[:3]), rot_mat.dot(dx[3:])])  ## transform to right coordinate system 
             #dx_[2]+= 1
             dq = self.get_dq(dx_)
-            dq += numpy.random.uniform(self.dq_mean_si, self.dq_std_si,6)
+            dq += numpy.random.normal(self.dq_mean_si, self.dq_std_si, 6)
             q = self.sim_ctrl_q + dq
+        
             self.set_force_for_q(q)
             # print(sum(abs(sim.data.qpos-sim.data.ctrl)))
 
     def get_dq(self, dx):
-        '''Does the transformation from cartesian space (dx) to joint space (dq)
-           Required since actions from the agent are in cartesian space, but the 
-           robot is controlled in joint space for each of the six joint angles
-        '''
         jacp = self.sim.data.get_body_jacp(name="gripper_dummy_heg").reshape(3, 6)
         jacr = self.sim.data.get_body_jacr(name="gripper_dummy_heg").reshape(3, 6)
         jac = numpy.vstack((jacp, jacr))
@@ -291,6 +329,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
         x_pos = self.sim.data.get_body_xpos("gripper_dummy_heg")
         x_pos += numpy.random.normal(self.pos_mean_si, self.pos_std_si, 3)
         x_mat = self.sim.data.get_body_xmat("gripper_dummy_heg")
+        #print(rotations.mat2euler(x_mat))
         rpy = normalize_rad(
             rotations.mat2euler(x_mat)
             + numpy.random.normal(self.rot_mean_si, self.rot_std_si, 3) * (numpy.pi/180)
@@ -323,19 +362,34 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.viewer.cam.elevation = -14.
 
     def _render_callback(self):
+        # Visualize target.
         pass
-    
+
     def _reset_sim(self):
-        # Tracking the first step to zero the ft-sensor
+        # Tracking the first step to zero the ft-sensor0
         self.start_flag = True
         if self.episode > 0:
             self.success_rate = float(numpy.sum(self.results)/float(len(self.results)))
-            print("Episode: {} Success Rate: {} ".format(self.episode, self.success_rate))
+            self.level, self.info = self.level_change(self.success_rate, self.level)
+
+            print(" | Worker: {} | Episode: {} | Success Rate: {} | Level: {} |".format(
+                self.worker_id, self.episode, 
+                self.success_rate, str(self.level).zfill(3))
+                )
+
             if len(self.results) < 10:
                 self.results.append(0)
             else:
                 self.results.pop(0)
                 self.results.append(0)
+        
+        if self.episode > 0 and self.episode % 10 == 0:
+            self.levels["{}".format(self.episode)]=self.level
+            with open(os.path.join(*[
+                self.LVL_SAVE_PATH, 
+                "worker_{}.json".format(self.worker_id)
+                ]), "w+") as outfile:
+                json.dump(self.levels, outfile)
         
         if self.save_data and self.episode > 0:
             if self.success_flag == 1:
@@ -352,9 +406,13 @@ class Ur10Env(robot_custom_env.RobotEnv):
                     "fz" : self.fzs,
                     "steps" : self.step_count,
                     "success" : self.success_flag,
-                    "reward" : self.reward_sum
+                    "reward" : self.reward_sum,
+                    "level" : self.level,
             }
-            with open(os.path.join(*[SAVE_PATH, "episode_{}.json".format(self.episode)]), "w") as file:
+            with open(os.path.join(*[
+                SAVE_PATH, 
+                "episode_{}.json".format(self.episode)
+                ]), "w") as file:
                 json.dump(save_dict,file)
                 file.write('\n')
         
@@ -362,54 +420,59 @@ class Ur10Env(robot_custom_env.RobotEnv):
             #self.fts = []
             #self.rewards = []
             #self.poses = []
-        self.fxs = []
-        self.fys = []
-        self.fzs = []
-        self.rewards = []
+        self.fxs = list()
+        self.fys = list()
+        self.fzs = list()
+        self.rewards = list()
         self.step_count = 0
         self.success_flag = 0
         self.episode += 1
         
-        #if not self.viewer is None:
-        #    self._get_viewer('human').update_sim(self.sim)
-        #self._get_viewer('human')._ncam = self.sim.model.ncam
-        
         deviation_q = numpy.array([0, 0, 0, 0, 0, 0])
 
-        self.ctrl_buffer = numpy.repeat(
-            (self.initial_qpos + deviation_q).reshape(1, 6),
-            4,
-            axis=0)
+        #if self.ft_drift:
+        #    self.ft_drift_val = numpy.random.uniform(-self.ft_drift_range, self.ft_drift_range)
+        #self.pos_drift_val = numpy.random.uniform(-self.pos_drift_range, self.pos_drift_range)
+
+        del self.sim
+        self.offset = randomize.randomize_ur10_xml(worker_id=self.worker_id, **self.randomize_kwargs)
+        model = mujoco_py.load_model_from_path(self.model_path)
+        self.sim = mujoco_py.MjSim(model, nsubsteps=self.n_substeps)
+        self.goal = self._sample_goal()
+        if not self.viewer is None:
+            self._get_viewer('human').update_sim(self.sim)
+        #self._get_viewer('human')._ncam = self.sim.model.ncam
+
+        self.ctrl_buffer = numpy.repeat((self.initial_qpos + deviation_q).reshape(1, 6), 4, axis=0)
         self.b, self.a = butter(2, 0.12)
         self.zi = [lfilter_zi(self.b, self.a) * (self.initial_qpos[i] + deviation_q[i]) for i in range(6)]
         self.qi_diff = 0
         self.last_target_q = self.initial_qpos + deviation_q
-        
+
         self.set_state(self.initial_qpos + deviation_q)
         self.sim.forward()
+
         self.sim.step()
-        
-        # Checking if there are contacts in simulation and returning false if so
+
         if self.sim.data.ncon == 0:
             for i in range(100):
                 self.sim.data.ctrl[:] = self.sim.data.qfrc_bias.copy()
-                self.sim.forward()
                 self.sim.step()
-            self.init_x = numpy.concatenate(
-                (self.sim.data.get_body_xpos("gripper_dummy_heg"),
-                self.sim.data.get_body_xquat("gripper_dummy_heg"))
-                )
+            self.init_x = numpy.concatenate((self.sim.data.get_body_xpos("gripper_dummy_heg"),
+                                             self.sim.data.get_body_xquat("gripper_dummy_heg")))
             self.set_force_for_q(self.initial_qpos + deviation_q)
 
         return self.sim.data.ncon == 0
 
     def _sample_goal(self):
+        home_path = os.getenv("HOME")
+        goal_path = os.path.join(*[home_path, "DRL_AI4RoMoCo", "code", "environment", "experiment_configs", "goal_ur10_simpheg_conf2.json"])
 
-        with open(GOAL_PATH, encoding='utf-8') as file:
+        with open(goal_path, encoding='utf-8') as file:
             goal = json.load(file)
-            xpos =  goal['xpos']
+            xpos =  goal['xpos'] + self.offset['body_pos_offset']
             xquat = goal['xquat']
-            rpy = normalize_rad(rotations.quat2euler(xquat))
+            rpy = normalize_rad(rotations.quat2euler(xquat)+self.offset['body_euler_offset'])
         return numpy.concatenate([xpos, rpy]).copy()
 
     def _is_success(self, achieved_goal, desired_goal):
@@ -458,7 +521,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
                 return False
 
     def _is_failure(self, achieved_goal, desired_goal):
-        #d = goal_distance(achieved_goal, desired_goal)
+        d = goal_distance(achieved_goal, desired_goal)
         #return (d > self.fail_threshold) & (numpy.round(self.sim.get_state()[0]/0.0005).astype('int') > 200) # removed early stop because baselines did not work with it
         return False
 
@@ -467,5 +530,70 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.set_state(initial_qpos)
         self.sim.forward()
 
+
     def render(self, mode='human', width=500, height=500):
         return super(Ur10Env, self).render(mode, width, height)
+
+
+    def level_change(self, success_rate, level):
+        '''Changes ADR level depending on the current success_rate'''
+
+        if success_rate > self.upper_level_bound and self.level_episodes >= self.level_episodes_bound:
+            level += 1
+            with open(os.path.join(*[ADR_CONFIG_PATH, "env_config_005_{}.yml".format(self.worker_id)])) as infile:
+                last_config = yaml.load(infile, Loader=yaml.FullLoader)
+                next_config = last_config
+
+            next_config["Learning"]["ADR"]["level"] = level
+
+            next_config["randomize_kwargs"]["var_mass"] = self.randomize_kwargs["var_mass"] + 0.01
+            next_config["randomize_kwargs"]["var_damp"] = self.randomize_kwargs["var_damp"] + 0.01
+            next_config["randomize_kwargs"]["var_fr"] = self.randomize_kwargs["var_fr"] + 0.01
+
+            next_config["randomize_kwargs"]["var_grav_x_y"] = self.randomize_kwargs["var_grav_x_y"] + 0.02
+            next_config["randomize_kwargs"]["var_grav_z"] = self.randomize_kwargs["var_grav_z"] + 0.2
+
+            next_config["randomize_kwargs"]["var_body_pos"] = self.randomize_kwargs["var_body_pos"] + 0.0025
+            next_config["randomize_kwargs"]["var_body_rot"] = self.randomize_kwargs["var_body_rot"] + 0
+
+            self.randomize_kwargs = next_config["randomize_kwargs"]
+
+            with open(os.path.join(*[ADR_CONFIG_PATH, "env_config_005_{}.yml".format(self.worker_id)]), "w") as outfile:
+                yaml.dump(next_config, outfile)
+                
+            self.level_episodes = 0
+            info = "Level up to: {}".format(level)
+            return level, info
+                
+        elif success_rate < self.lower_level_bound and level > 0 and self.level_episodes >= self.level_episodes_bound:
+            level -= 1
+            with open(os.path.join(*[ADR_CONFIG_PATH, "env_config_005_{}.yml".format(self.worker_id)])) as infile:
+                last_config = yaml.load(infile, Loader=yaml.FullLoader)
+                next_config = last_config
+
+            next_config["Learning"]["ADR"]["level"] = level
+            
+            next_config["randomize_kwargs"]["var_mass"] = self.randomize_kwargs["var_mass"] - 0.01
+            next_config["randomize_kwargs"]["var_damp"] = self.randomize_kwargs["var_damp"] - 0.01
+            next_config["randomize_kwargs"]["var_fr"] = self.randomize_kwargs["var_fr"] - 0.01
+        
+            next_config["randomize_kwargs"]["var_grav_x_y"] = self.randomize_kwargs["var_grav_x_y"] - 0.02
+            next_config["randomize_kwargs"]["var_grav_z"] = self.randomize_kwargs["var_grav_z"] - 0.2
+        
+            next_config["randomize_kwargs"]["var_body_pos"] = self.randomize_kwargs["var_body_pos"] - 0.0025
+            next_config["randomize_kwargs"]["var_body_rot"] = self.randomize_kwargs["var_body_rot"] - 0
+        
+            self.randomize_kwargs = next_config["randomize_kwargs"]
+        
+            with open(os.path.join(*[ADR_CONFIG_PATH, "env_config_005_{}.yml".format(self.worker_id)]), "w") as outfile:
+                yaml.dump(next_config, outfile)
+            
+            self.level_episodes = 0
+            info = "Level down to: {}".format(level)
+            return level, info
+        
+        else:
+            level = level
+            self.level_episodes += 1
+            info = "Same Level at: {}".format(level)
+            return level, info
