@@ -109,7 +109,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.zi = [lfilter_zi(b,a) * self.initial_qpos[i] for i in range(6)]
         self.qi_diff = env_config["controller"]["qi_diff"]
         self.last_target_q = self.initial_qpos.copy()
-        self.only_grav_comp = True
+        self.only_grav_comp = False
 
         ########################
         # NOISE
