@@ -9,6 +9,19 @@ from gym.envs.robotics.ur10 import randomize
 import matplotlib.pyplot as plt
 from scipy.signal import lfilter, lfilter_zi, butter
 
+PROJECT_PATH = os.path.join(*[os.getenv("HOME"), "DRL_AI4RoMoCo"])
+MODEL_PATH = os.path.join(*[PROJECT_PATH, "code", "environment", "UR10"])
+CONFIG_PATH = os.path.join(*[PROJECT_PATH, "code", "config", "environment"])
+SAVE_PATH = os.path.join(*[PROJECT_PATH, "code", "data", "sim_poses"])
+SAVE_PATH = os.path.join(*[
+    PROJECT_PATH,
+    "code",
+    "data",
+    "EVAL_SOURCESIM",
+    "XXX",
+    ])
+
+
 def goal_distance(obs, goal):
     obs = obs[:6]
     assert obs.shape == goal.shape
@@ -25,8 +38,7 @@ def normalize_rad(angles):
 
 
 class Ur10Env(robot_custom_env.RobotEnv):
-    """Superclass for all Ur10 environments.
-    """
+    """Superclass for all Ur10 environments."""
 
     def __init__(self,env_config, model_xml_path, worker_id):
 
@@ -36,7 +48,27 @@ class Ur10Env(robot_custom_env.RobotEnv):
         if model_xml_path == None:
             self.model_path = env_config["model_xml_file"]
 
-    ##########################################
+
+    ########################################## SAVING
+
+        self.save_data = env_config["Saving"]
+        if self.save_data:
+            self.fts = []
+            self.fxs = []
+            self.fys = []
+            self.fzs = []
+            self.obs = []
+            self.rewards = []
+            self.poses = []
+
+    ######################################### MONITORING
+
+        self.episode = 0
+        self.start_flag = True
+        self.results = list()
+
+    ########################################## INIT
+
         self.model_path = model_xml_path
         self.n_substeps = env_config["n_substeps"]
         self.distance_threshold = env_config["Learning"]["distance_threshold"]
@@ -45,10 +77,24 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.reward_type = env_config["reward_type"]
         self.ctrl_type = env_config["ctrl_type"]
         self.vary = env_config["vary"]
-        self.init_vary_range =  numpy.array([0.03, 0.03, 0.03, 3/180*np.pi, 3/180*np.pi, 3/180*np.pi])
+        self.vary_params = env_config["Domain_Randomization"]["vary_params"]
+        self.init_vary_range = numpy.concatenate([
+            self.vary_params[:3],
+            numpy.array(self.vary_params[3:])*(2*numpy.pi/360)
+            ])
         self.corrective = env_config["corrective"]
+        self.n_actions = env_config["n_actions"]
+        self.action_rate = env_config["action_rate"] 
+        self.SEED = env_config["SEED"]
+        self.R1 = env_config["Reward"]["R1"]
+        self.R2 = env_config["Reward"]["R2"]
+        self.success_reward = env_config["Reward"]["success_reward"]
+        self.dx_max = env_config["dx_max"]
 
-        self.randomize_kwargs = env_config["randomize_kwargs"]
+        self.gripper_mass = env_config["gripper_mass"]
+
+    ########################################## NOISE
+
         self.pos_std = numpy.array(env_config["Noise"]["pos_std"])
         self.pos_drift_range = numpy.array(env_config["Noise"]["pos_drift_range"])
         self.pos_drift_val = numpy.array(env_config["Noise"]["pos_drift_val"])
@@ -58,24 +104,14 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.ft_drift_range = env_config["Noise"]["ft_drift_range"]
         self.ft_drift_val = env_config["Noise"]["ft_drift_val"]
 
-        self.n_actions = env_config["n_actions"]
-        self.action_rate = env_config["action_rate"] 
-        self.SEED = env_config["SEED"]
+    ######################################## RANDOMIZATION
 
-        self.R1 = env_config["Reward"]["R1"]
-        self.R2 = env_config["Reward"]["R2"]
-        self.success_reward = env_config["Reward"]["success_reward"]
-
-        self.punish_force = env_config["Noise"]["punish_force"]
-        self.punish_force_thresh = env_config["Noise"]["punish_force_thresh"]
-        self.punish_force_factor = env_config["Noise"]["punish_force_factor"]
-        self.dx_max = env_config["dx_max"]
-
+        self.randomize_kwargs = env_config["randomize_kwargs"]
         self.offset = randomize.randomize_ur10_xml()
         self.worker_id = worker_id
 
+    ######################################## CONTROLLER
 
-    ########################################
         self.K = numpy.array(env_config["controller"]["K"])
         self.kp = numpy.array(env_config["controller"]["kp"])
         self.ki = numpy.array(env_config["controller"]["ki"])
@@ -90,13 +126,16 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.qi_diff = env_config["controller"]["qi_diff"]
         self.last_target_q = self.initial_qpos.copy()
         self.only_grav_comp = env_config["controller"]["only_grav_comp"]
-    #########################################
         self.sim_ctrl_q = self.initial_qpos
+        
+    #########################################
         
 
         super(Ur10Env, self).__init__(
-            model_path=self.model_path, n_substeps=self.n_substeps, n_actions=self.n_actions,
-            initial_qpos=self.initial_qpos, seed=self.SEED, success_reward=self.success_reward, action_rate=self.action_rate)
+            model_path=self.model_path, n_substeps=self.n_substeps,
+            n_actions=self.n_actions, initial_qpos=self.initial_qpos, 
+            seed=self.SEED, success_reward=self.success_reward, 
+            action_rate=self.action_rate)
         
 
 
@@ -118,24 +157,14 @@ class Ur10Env(robot_custom_env.RobotEnv):
         qd_diff = target_qd - self.sim.data.qvel
         self.qi_diff += q_diff
 
-        #for j in range(6):
-        #    if np.sign(self.qi_diff[j]) != np.sign(q_diff[j]):
-        #        self.qi_diff[j] = 0
-
         self.sim.data.ctrl[:] = self.sim.data.qfrc_bias.copy()
 
         if not only_grav_comp:
             self.sim.data.ctrl[:] += self.K * (np.clip(self.kp * q_diff + self.ki * self.qi_diff,
                                                        -self.max_fb, self.max_fb) + self.kf * target_qd)
         self.sim_ctrl_q = q_ctrl
-        return self.sim.data.ctrl[:].copy()
 
-    #def set_force_for_q(self, q, only_grav_comp=False):
-    #    self.sim.data.ctrl[:] = self.sim.data.qfrc_bias  # + sim.data.qfrc_bias*0.01*numpy.random.randn(6,)
-    #    if not only_grav_comp:
-    #        self.sim.data.ctrl[:] += np.clip(self.p * (q - self.sim.data.qpos) + self.d * (0 - self.sim.data.qvel), -self.max_T, self.max_T)
-    #    self.sim_ctrl_q = q
-    #    return self.sim.data.ctrl[:].copy()
+        return self.sim.data.ctrl[:].copy()
 
 
     def activate_noise(self):
@@ -148,34 +177,14 @@ class Ur10Env(robot_custom_env.RobotEnv):
         + numpy.absolute(obs[8])
         + numpy.absolute(obs[9])
         rew = self.R1 * (-d) + self.R2 *(-f)
-        #if self.save_data:
-        #    self.rewards.append(rew)
-        #self.step_count += 1
+        if self.save_data:
+            self.rewards.append(rew)
+        self.step_count += 1
         return rew
-    '''
-    def compute_reward(self, obs, goal, info):
-        # Compute distance between goal and the achieved goal.
-        d = goal_distance(obs, goal)
-        #print(d)
-        if self.reward_type == 'sparse':
-            #if (d > self.fail_threshold).astype(np.float32):
-            #     #-8000+2n_t  ... sim.get_state()[0]/0.0005 = n_substeps * n_t
-            #    reward = -8000 + numpy.round(self.sim.get_state()[0]/0.0005).astype('int')
-            return -(d > self.distance_threshold).astype(np.float32) - 10*(d > self.fail_threshold).astype(np.float)
-        else:
-            rew = -d
-            force_amp = numpy.linalg.norm(obs[6:9])
-            if self.punish_force and force_amp > self.punish_force_thresh:
-                rew -= self.punish_force_factor * force_amp
-
-            return rew
-    '''
-    # RobotEnv methods
-    # ----------------------------
 
     def _step_callback(self):
         a = 0
-        # not implemented
+
     def set_state(self, qpos):
         old_state = self.sim.get_state()
         new_state = mujoco_py.MjSimState(old_state.time, qpos, old_state.qvel,
@@ -240,11 +249,8 @@ class Ur10Env(robot_custom_env.RobotEnv):
             #dx_[2]+= 1
             dq = self.get_dq(dx_)
             q = self.sim_ctrl_q + dq
+
             self.set_force_for_q(q)
-
-
-            # print(sum(abs(sim.data.qpos-sim.data.ctrl)))
-
 
     def get_dq(self, dx):
         jacp = self.sim.data.get_body_jacp(name="gripper_dummy_heg").reshape(3, 6)
@@ -253,16 +259,15 @@ class Ur10Env(robot_custom_env.RobotEnv):
         dq = numpy.linalg.lstsq(jac, dx)[0].reshape(6, )
         return dq
 
-
     def _get_obs(self):
-        # positions
         rot_mat = self.sim.data.get_body_xmat('gripper_dummy_heg')
         ft = self.sim.data.sensordata.copy()
         if self.ft_noise:
             ft += numpy.random.randn(6,) * self.ft_std
         if self.ft_drift:
             ft += self.ft_drift_val
-        ft[1] -= 0.350*9.81  # nulling in initial position
+
+        ft[1] -= self.gripper_mass*9.81  # nulling in initial position
         x_pos = self.sim.data.get_body_xpos("gripper_dummy_heg")
         x_pos += numpy.random.uniform(-self.pos_std[:3], self.pos_std[:3])
         x_pos += self.pos_drift_val[:3]
@@ -276,6 +281,15 @@ class Ur10Env(robot_custom_env.RobotEnv):
         obs = np.concatenate([
             rot_mat.dot(x_pos-self.goal[:3]), rot_mat.dot(normalize_rad(rpy-self.goal[3:])), ft.copy()
         ])
+        if self.save_data:
+            self.fts.append([ft[0], ft[1], ft[2], ft[3], ft[4], ft[5],])
+            self.obs.append(obs)
+            self.fxs.append(ft[0])
+            self.fys.append(ft[1])
+            self.fzs.append(ft[2])
+            self.poses.append(numpy.concatenate(
+                [x_pos-self.goal[:3],
+                normalize_rad(rpy-self.goal[3:])]))
 
         self.last_obs = obs
         return obs
@@ -294,6 +308,53 @@ class Ur10Env(robot_custom_env.RobotEnv):
         a=0
 
     def _reset_sim(self):
+
+        # MONITORING
+        if self.episode > 0:
+            self.success_rate = float(numpy.sum(self.results)/float(len(self.results)))
+            print("Episode: {} Success Rate: {} ".format(self.episode, self.success_rate))
+            if len(self.results) < 10:
+                self.results.append(0)
+            else:
+                self.results.pop(0)
+                self.results.append(0)
+
+        
+        # SAVING
+        if self.save_data and self.episode > 0:
+            if self.success_flag == 1:
+                self.rewards.append(self.success_reward)
+            self.reward_sum = numpy.sum(self.rewards)
+            
+            save_dict = {
+                    #"observations" : self.obs,
+                    #"ft_values" : self.fts,
+                    #"rewards" : self.rewards,
+                    #"poses" : self.poses
+                    "fx" : self.fxs,
+                    "fy" : self.fys,
+                    "fz" : self.fzs,
+                    "steps" : self.step_count,
+                    "success" : self.success_flag,
+                    "reward" : self.reward_sum
+            }
+            with open(os.path.join(*[SAVE_PATH, "episode_{}.json".format(self.episode)]), "w") as file:
+                json.dump(save_dict,file)
+                file.write('\n')
+        
+            #self.obs = []
+            #self.fts = []
+            #self.rewards = []
+            #self.poses = []
+        self.fxs = []
+        self.fys = []
+        self.fzs = []
+        self.rewards = []
+        self.step_count = 0
+        self.success_flag = 0
+        self.episode += 1
+
+
         if self.vary == True:
             deviation_x = numpy.random.uniform(-self.init_vary_range, self.init_vary_range)
             deviation_q = self.get_dq(deviation_x)
@@ -353,9 +414,20 @@ class Ur10Env(robot_custom_env.RobotEnv):
         obs = np.concatenate([
             rot_mat.dot(x_pos-self.goal[:3]), rot_mat.dot(normalize_rad(rpy-self.goal[3:]))
         ])
-
         d = goal_distance(obs, desired_goal)
-        return (d < self.distance_threshold).astype(np.float32)
+
+        if d < self.distance_threshold:
+            if len(self.results) == 0:
+                self.results.append(1)
+            else:
+                self.results.pop()
+                self.results.append(1)
+            self.success_flag = 1
+            return True
+        else:
+            return False       
+
+        #return (d < self.distance_threshold).astype(np.float32)
 
     def _is_failure(self, achieved_goal, desired_goal):
         d = goal_distance(achieved_goal, desired_goal)
