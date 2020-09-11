@@ -45,10 +45,17 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.reward_type = env_config["reward_type"]
         self.ctrl_type = env_config["ctrl_type"]
         self.vary = env_config["vary"]
-        self.init_vary_range =  numpy.array([0.03, 0.03, 0.03, 3/180*np.pi, 3/180*np.pi, 3/180*np.pi])
+        self.vary_params = env_config["Domain_Randomization"]["vary_params"]    #
+        self.init_vary_range = numpy.concatenate([                              #
+            self.vary_params[:3],
+            numpy.array(self.vary_params[3:])*(2*numpy.pi/360)
+            ])
         self.corrective = env_config["corrective"]
-
         self.randomize_kwargs = env_config["randomize_kwargs"]
+
+
+    ########################## MH Noise
+
         self.pos_std = numpy.array(env_config["Noise"]["pos_std"])
         self.pos_drift_range = numpy.array(env_config["Noise"]["pos_drift_range"])
         self.pos_drift_val = numpy.array(env_config["Noise"]["pos_drift_val"])
@@ -58,6 +65,24 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.ft_drift_range = env_config["Noise"]["ft_drift_range"]
         self.ft_drift_val = env_config["Noise"]["ft_drift_val"]
 
+    ############################
+
+        self.pos_mean_si = env_config["Noise"]["pos_mean_si"]
+        self.pos_std_si = env_config["Noise"]["pos_std_si"]
+
+        self.rot_mean_si = env_config["Noise"]["rot_mean_si"]
+        self.rot_std_si = env_config["Noise"]["rot_std_si"]
+
+        self.f_mean_si = env_config["Noise"]["f_mean_si"]
+        self.t_mean_si = env_config["Noise"]["t_mean_si"]
+        self.f_std_si = env_config["Noise"]["f_std_si"]
+        self.t_std_si = env_config["Noise"]["t_std_si"]
+
+        self.dq_mean_si = env_config["Noise"]["dq_mean_si"]
+        self.dq_std_si = env_config["Noise"]["dq_std_si"]
+
+    ############################
+
         self.n_actions = env_config["n_actions"]
         self.action_rate = env_config["action_rate"] 
         self.SEED = env_config["SEED"]
@@ -66,14 +91,15 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.R2 = env_config["Reward"]["R2"]
         self.success_reward = env_config["Reward"]["success_reward"]
 
-        self.punish_force = env_config["Noise"]["punish_force"]
-        self.punish_force_thresh = env_config["Noise"]["punish_force_thresh"]
-        self.punish_force_factor = env_config["Noise"]["punish_force_factor"]
         self.dx_max = env_config["dx_max"]
 
         self.offset = randomize.randomize_ur10_xml()
         self.worker_id = worker_id
 
+    ######################################## MONITORING 
+
+        self.episode = 0
+        self.results = list()
 
     ########################################
         self.K = numpy.array(env_config["controller"]["K"])
@@ -239,6 +265,9 @@ class Ur10Env(robot_custom_env.RobotEnv):
             dx_ = np.concatenate([rot_mat.dot(dx[:3]), rot_mat.dot(dx[3:])])  ## transform to right coordinate system
             #dx_[2]+= 1
             dq = self.get_dq(dx_)
+
+            dq += numpy.random.normal(self.dq_mean_si, self.dq_std_si, 6)
+
             q = self.sim_ctrl_q + dq
             self.set_force_for_q(q)
 
@@ -258,20 +287,30 @@ class Ur10Env(robot_custom_env.RobotEnv):
         # positions
         rot_mat = self.sim.data.get_body_xmat('gripper_dummy_heg')
         ft = self.sim.data.sensordata.copy()
-        if self.ft_noise:
-            ft += numpy.random.randn(6,) * self.ft_std
-        if self.ft_drift:
-            ft += self.ft_drift_val
-        ft[1] -= 0.350*9.81  # nulling in initial position
+        #if self.ft_noise:
+        #    ft += numpy.random.randn(6,) * self.ft_std
+        #if self.ft_drift:
+        #    ft += self.ft_drift_val
+        ft[1] -= 0.588*9.81  # nulling in initial position
+
+        ft[:3] += numpy.random.normal(self.f_mean_si, self.f_std_si, 3)
+        ft[3:] += numpy.random.normal(self.t_mean_si, self.t_std_si, 3)
+        
         x_pos = self.sim.data.get_body_xpos("gripper_dummy_heg")
-        x_pos += numpy.random.uniform(-self.pos_std[:3], self.pos_std[:3])
-        x_pos += self.pos_drift_val[:3]
+        x_pos += numpy.random.normal(self.pos_mean_si, self.pos_std_si, 3)
+
+        #x_pos += numpy.random.uniform(-self.pos_std[:3], self.pos_std[:3])
+        #x_pos += self.pos_drift_val[:3]
 
         #x_quat = self.sim.data.get_body_xquat("gripper_dummy_heg")
+
         x_mat = self.sim.data.get_body_xmat("gripper_dummy_heg")
+
+        rpy_noise = numpy.random.normal(self.rot_mean_si, self.rot_std_si, 3) * (numpy.pi/180)
+
         rpy = normalize_rad(rotations.mat2euler(x_mat)
-                            + numpy.random.uniform(-self.pos_std[3:], self.pos_std[3:])
-                            + self.pos_drift_val[3:])
+                            + rpy_noise )
+                            #+ self.pos_drift_val[3:])
 
         obs = np.concatenate([
             rot_mat.dot(x_pos-self.goal[:3]), rot_mat.dot(normalize_rad(rpy-self.goal[3:])), ft.copy()
@@ -294,15 +333,28 @@ class Ur10Env(robot_custom_env.RobotEnv):
         a=0
 
     def _reset_sim(self):
+        
+        #########################
+        if self.episode > 0:
+            self.success_rate = float(numpy.sum(self.results)/float(len(self.results)))
+            print("Episode: {} Success Rate: {} ".format(self.episode, self.success_rate))
+            if len(self.results) < 10:
+                self.results.append(0)
+            else:
+                self.results.pop(0)
+        #########################
+
+        self.episode +=1
+
         if self.vary == True:
             deviation_x = numpy.random.uniform(-self.init_vary_range, self.init_vary_range)
             deviation_q = self.get_dq(deviation_x)
         else:
             deviation_q = numpy.array([0, 0, 0, 0, 0, 0])
 
-        if self.ft_drift:
-            self.ft_drift_val = numpy.random.uniform(-self.ft_drift_range, self.ft_drift_range)
-        self.pos_drift_val = numpy.random.uniform(-self.pos_drift_range, self.pos_drift_range)
+        #if self.ft_drift:
+        #    self.ft_drift_val = numpy.random.uniform(-self.ft_drift_range, self.ft_drift_range)
+        #self.pos_drift_val = numpy.random.uniform(-self.pos_drift_range, self.pos_drift_range)
 
         del self.sim
         self.offset = randomize.randomize_ur10_xml(worker_id=self.worker_id, **self.randomize_kwargs)
@@ -353,9 +405,20 @@ class Ur10Env(robot_custom_env.RobotEnv):
         obs = np.concatenate([
             rot_mat.dot(x_pos-self.goal[:3]), rot_mat.dot(normalize_rad(rpy-self.goal[3:]))
         ])
-
         d = goal_distance(obs, desired_goal)
-        return (d < self.distance_threshold).astype(np.float32)
+
+        if d < self.distance_threshold:
+            if len(self.results) == 0:
+                self.results.append(1)
+            else:
+                self.results.pop()
+                self.results.append(1)
+            self.success_flag = 1
+            return True
+        else:
+            return False 
+
+        #return (d < self.distance_threshold).astype(np.float32)
 
     def _is_failure(self, achieved_goal, desired_goal):
         d = goal_distance(achieved_goal, desired_goal)
