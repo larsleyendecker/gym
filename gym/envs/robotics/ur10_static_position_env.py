@@ -161,8 +161,8 @@ class Ur10Env(robot_custom_env.RobotEnv):
             #diff_now = numpy.array(x_now - self.init_x).reshape(7,)
             diff_then = numpy.array(x_then[:3] - self.init_x[:3])
 
-            barriers_min = numpy.array([-0.2, -0.2,   -0.2])
-            barriers_max = numpy.array([0.2,  0.4, 0.2])
+            barriers_min = numpy.array([-0.4, -0.8,   -0.4])
+            barriers_max = numpy.array([0.4,  0.8, 0.4])
             '''
             for i in range(3):
                 if (barriers_min[i] < diff_then[i] < barriers_max[i]):

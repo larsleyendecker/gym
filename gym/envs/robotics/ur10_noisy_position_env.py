@@ -10,7 +10,8 @@ from scipy.signal import lfilter, lfilter_zi, butter
 #from utils.saving import NumpyEncoder
 
 PROJECT_PATH = os.path.join(*[os.getenv("HOME"), "DRL_AI4RoMoCo"])
-MODEL_PATH = os.path.join(*[PROJECT_PATH, "code", "environment", "UR10_new"])
+#MODEL_PATH = os.path.join(*[PROJECT_PATH, "code", "environment", "UR10_new"])
+MODEL_PATH = os.path.join(*[PROJECT_PATH, "code", "environment", "UR10_test_position"])
 CONFIG_PATH = os.path.join(*[PROJECT_PATH, "code", "config", "environment"])
 SAVE_PATH = os.path.join(*[
     PROJECT_PATH, 
@@ -259,14 +260,14 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.last_obs = obs
         return obs
     
-    def _viewer_setup(self):
-        body_id = self.sim.model.body_name2id('body_link')
-        lookat = self.sim.data.body_xpos[body_id]
-        for idx, value in enumerate(lookat):
-            self.viewer.cam.lookat[idx] = value
-        self.viewer.cam.distance = 2.5
-        self.viewer.cam.azimuth = 132.
-        self.viewer.cam.elevation = -14.
+    #def _viewer_setup(self):
+    #    body_id = self.sim.model.body_name2id('body_link')
+    #    lookat = self.sim.data.body_xpos[body_id]
+    #    for idx, value in enumerate(lookat):
+    #        self.viewer.cam.lookat[idx] = value
+    #    self.viewer.cam.distance = 2.5
+    #    self.viewer.cam.azimuth = 132.
+    #    self.viewer.cam.elevation = -14.
     
     def _render_callback(self):
         pass

@@ -93,6 +93,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.corrective = env_config["corrective"]
         self.vary = env_config["vary"]
         self.dx_max = env_config["dx_max"]
+        self.gripper_mass = env_config["gripper_mass"]
 
         # Controller Parameter
         self.K = numpy.array(env_config["controller"]["K"])
@@ -295,22 +296,18 @@ class Ur10Env(robot_custom_env.RobotEnv):
     def _get_obs(self):
         rot_mat = self.sim.data.get_body_xmat('gripper_dummy_heg')
         ft = self.sim.data.sensordata.copy()
+
+        if self.start_flag:
+            ft = numpy.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        self.start_flag = False
+
+        ft[1] -= self.gripper_mass * 9.81
         ft[:3] += numpy.random.normal(self.f_mean_si, self.f_std_si, 3)
         ft[:3] += numpy.random.uniform(-self.f_var_dr_uncor, self.f_var_dr_uncor, 3)
         ft[:3] += self.f_corr
         ft[3:] += numpy.random.normal(self.t_mean_si, self.t_std_si, 3)
         ft[3:] += numpy.random.uniform(-self.t_var_dr_uncor, self.t_var_dr_uncor, 3)
         ft[3:] += self.t_corr
-
-        if self.start_flag:
-            ft = numpy.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-            ft[:3] += numpy.random.normal(self.f_mean_si, self.f_std_si, 3)
-            ft[:3] += numpy.random.uniform(-self.f_var_dr_uncor, self.f_var_dr_uncor, 3)
-            ft[:3] += self.f_corr
-            ft[3:] += numpy.random.normal(self.t_mean_si, self.t_std_si, 3)
-            ft[3:] += numpy.random.uniform(-self.t_var_dr_uncor, self.t_var_dr_uncor, 3)
-            ft[3:] += self.t_corr
-        self.start_flag = False
 
         x_pos = self.sim.data.get_body_xpos("gripper_dummy_heg")
         x_pos += numpy.random.normal(self.pos_mean_si, self.pos_std_si, 3)
@@ -355,7 +352,10 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.start_flag = True
         if self.episode > 0:
             self.success_rate = float(numpy.sum(self.results)/float(len(self.results)))
-            print("Episode: {} Success Rate: {} ".format(self.episode, self.success_rate))
+            print(" | Episode: {} | Success Rate: {} | ".format(
+                self.episode, 
+                self.success_rate)
+                )
             if len(self.results) < 10:
                 self.results.append(0)
             else:

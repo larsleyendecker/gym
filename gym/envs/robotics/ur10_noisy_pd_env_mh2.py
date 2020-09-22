@@ -81,7 +81,8 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.dq_mean_si = env_config["Noise"]["dq_mean_si"]
         self.dq_std_si = env_config["Noise"]["dq_std_si"]
 
-    ############################
+    ######################
+
 
         self.n_actions = env_config["n_actions"]
         self.action_rate = env_config["action_rate"] 
@@ -265,9 +266,6 @@ class Ur10Env(robot_custom_env.RobotEnv):
             dx_ = np.concatenate([rot_mat.dot(dx[:3]), rot_mat.dot(dx[3:])])  ## transform to right coordinate system
             #dx_[2]+= 1
             dq = self.get_dq(dx_)
-
-            dq += numpy.random.normal(self.dq_mean_si, self.dq_std_si, 6)
-
             q = self.sim_ctrl_q + dq
             self.set_force_for_q(q)
 
@@ -293,11 +291,19 @@ class Ur10Env(robot_custom_env.RobotEnv):
         #    ft += self.ft_drift_val
         ft[1] -= 0.588*9.81  # nulling in initial position
 
-        ft[:3] += numpy.random.normal(self.f_mean_si, self.f_std_si, 3)
-        ft[3:] += numpy.random.normal(self.t_mean_si, self.t_std_si, 3)
-        
+        ft_si_noise = numpy.concatenate([
+            numpy.random.normal(0.0, self.f_std_si, 3),
+            numpy.random.normal(0.0, self.t_std_si, 3)
+        ])
+
+        ft_noise = ft_si_noise
+        ft += ft_noise
+
         x_pos = self.sim.data.get_body_xpos("gripper_dummy_heg")
-        x_pos += numpy.random.normal(self.pos_mean_si, self.pos_std_si, 3)
+        pos_si_noise = numpy.random.normal(0.0, self.pos_std_si, 3)
+
+        pos_noise = pos_si_noise 
+        x_pos += pos_noise
 
         #x_pos += numpy.random.uniform(-self.pos_std[:3], self.pos_std[:3])
         #x_pos += self.pos_drift_val[:3]
@@ -308,9 +314,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
 
         rpy_noise = numpy.random.normal(self.rot_mean_si, self.rot_std_si, 3) * (numpy.pi/180)
 
-        rpy = normalize_rad(rotations.mat2euler(x_mat)
-                            + rpy_noise )
-                            #+ self.pos_drift_val[3:])
+        rpy = normalize_rad(rotations.mat2euler(x_mat))
 
         obs = np.concatenate([
             rot_mat.dot(x_pos-self.goal[:3]), rot_mat.dot(normalize_rad(rpy-self.goal[3:])), ft.copy()
