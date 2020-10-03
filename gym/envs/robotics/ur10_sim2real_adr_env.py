@@ -106,6 +106,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
 
         self.dx_max = env_config["dx_max"]
         self.gripper_mass = env_config["gripper_mass"]
+        self.force_scaler = env_config["force_scaler"]
 
     ########################################## NOISE
 
@@ -217,15 +218,18 @@ class Ur10Env(robot_custom_env.RobotEnv):
         return self.sim.data.ctrl[:].copy()
 
 
-    def activate_noise(self):
-        self.vary=True
-        print('noise has been activated.')
 
     def compute_reward(self, obs, goal, info):
+
         d = goal_distance(obs,goal)
-        f = numpy.absolute(obs[7])
-        + numpy.absolute(obs[8])
-        + numpy.absolute(obs[9])
+
+        #f = numpy.absolute(obs[7])
+        #+ numpy.absolute(obs[8])
+        #+ numpy.absolute(obs[9])
+        f = numpy.absolute(self.raw_forces[0])
+        + numpy.absolute(self.raw_forces[1])
+        + numpy.absolute(self.raw_forces[2])
+
         rew = self.R1 * (-d) + self.R2 *(-f)
         #if self.save_data:
         #    self.rewards.append(rew)
@@ -235,6 +239,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
     def _step_callback(self):
         a = 0
         # not implemented
+
     def set_state(self, qpos):
         old_state = self.sim.get_state()
         new_state = mujoco_py.MjSimState(old_state.time, qpos, old_state.qvel,
@@ -318,15 +323,22 @@ class Ur10Env(robot_custom_env.RobotEnv):
         rot_mat = self.sim.data.get_body_xmat('gripper_dummy_heg')
         ft = self.sim.data.sensordata.copy()
 
+        ft[1] -= self.gripper_mass*9.81  # nulling in initial position
+
         if self.start_flag:
             ft = numpy.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
         self.start_flag = False
 
-        ft += numpy.random.normal(0.0, self.ft_noise_std)   
-        ft += numpy.random.uniform(-self.ft_rand_uncor_bound, self.ft_rand_uncor_bound) 
-        ft += self.ft_rand_cor
+        self.raw_forces = ft[:3].copy()
 
-        ft[1] -= self.gripper_mass*9.81  # nulling in initial position
+        ft_noise = numpy.random.normal(0.0, self.ft_noise_std) \
+            + numpy.random.uniform(
+                -self.ft_rand_uncor_bound, 
+                self.ft_rand_uncor_bound) \
+            + self.ft_rand_cor
+
+        ft += self.force_scaler*ft_noise
+
         x_pos = self.sim.data.get_body_xpos("gripper_dummy_heg")
         x_pos += numpy.random.normal(0.0, self.pos_noise_std[:3])
         x_pos += numpy.random.uniform(
@@ -361,8 +373,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.viewer.cam.elevation = -14.
 
     def _render_callback(self):
-        # Visualize target.
-        a=0
+        pass
 
     def _reset_sim(self):
 

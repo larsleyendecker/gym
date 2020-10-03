@@ -1,8 +1,9 @@
 import numpy as np
 import numpy
+import yaml
 import mujoco_py
 import json
-from gym.envs.robotics import rotations, marius_custom_env, utils
+from gym.envs.robotics import rotations, robot_custom_env_mh,robot_custom_env, utils
 import os
 from gym.envs.robotics.ur10 import randomize
 import matplotlib.pyplot as plt
@@ -23,94 +24,106 @@ def normalize_rad(angles):
     return angles
 
 
-class Ur10Env(marius_custom_env.RobotEnv):
+class Ur10Env(robot_custom_env.RobotEnv):
     """Superclass for all Ur10 environments.
     """
 
-    def __init__(
-        self, model_path, n_substeps, distance_threshold, initial_qpos, reward_type, ctrl_type="joint",
-            fail_threshold=0.25, vary=False,
-            init_vary_range=numpy.array([0.03, 0.03, 0.03, 3/180*np.pi, 3/180*np.pi, 3/180*np.pi]), corrective=False,
-            worker_id=1, randomize_kwargs={}, pos_std=numpy.array([0, 0, 0, 0, 0, 0]),
-            pos_drift_range=numpy.array([0, 0, 0, 0, 0, 0]), ft_noise=False, ft_drift=False, punish_force=False,
-            punish_force_thresh=20, punish_force_factor=0.001, dx_max=0.0002
-    ):
-        """Initializes a new Fetch environment.
-        Args:
-            model_path (string): path to the environments XML file
-            n_substeps (int): number of substeps the simulation runs on every call to step
-            distance_threshold (float): the threshold after which a goal is considered achieved
-            initial_qpos (array): an array of values that define the initial configuration
-            reward_type ('sparse' or 'dense'): the reward type, i.e. sparse or dense
-        """
-        self.dx_max=dx_max
-        self.xml_path = model_path
+    def __init__(self,env_config, model_xml_path, worker_id):
+
+        with open(env_config) as cfg:
+            env_config = yaml.load(cfg, Loader=yaml.FullLoader)
+
+        if model_xml_path == None:
+            self.model_path = env_config["model_xml_file"]
+
+    ##########################################
+        self.model_path = model_xml_path
+        self.n_substeps = env_config["n_substeps"]
+        self.distance_threshold = env_config["Learning"]["distance_threshold"]
+        self.fail_threshold = env_config["Learning"]["fail_threshold"]
+        self.initial_qpos = numpy.array(env_config["initial_qpos"])
+        self.reward_type = env_config["reward_type"]
+        self.ctrl_type = env_config["ctrl_type"]
+        self.vary = env_config["vary"]
+        self.vary_params = env_config["Domain_Randomization"]["vary_params"]    #
+        self.init_vary_range = numpy.concatenate([                              #
+            self.vary_params[:3],
+            numpy.array(self.vary_params[3:])*(2*numpy.pi/360)
+            ])
+        self.corrective = env_config["corrective"]
+        self.randomize_kwargs = env_config["randomize_kwargs"]
+
+
+    ########################## MH Noise
+
+        self.pos_std = numpy.array(env_config["Noise"]["pos_std"])
+        self.pos_drift_range = numpy.array(env_config["Noise"]["pos_drift_range"])
+        self.pos_drift_val = numpy.array(env_config["Noise"]["pos_drift_val"])
+        self.ft_noise = env_config["Noise"]["ft_noise"]
+        self.ft_drift = env_config["Noise"]["ft_drift"]
+        self.ft_std = env_config["Noise"]["ft_std"]
+        self.ft_drift_range = env_config["Noise"]["ft_drift_range"]
+        self.ft_drift_val = env_config["Noise"]["ft_drift_val"]
+
+    ############################
+
+        self.pos_mean_si = env_config["Noise"]["pos_mean_si"]
+        self.pos_std_si = env_config["Noise"]["pos_std_si"]
+
+        self.rot_mean_si = env_config["Noise"]["rot_mean_si"]
+        self.rot_std_si = env_config["Noise"]["rot_std_si"]
+
+        self.f_mean_si = env_config["Noise"]["f_mean_si"]
+        self.t_mean_si = env_config["Noise"]["t_mean_si"]
+        self.f_std_si = env_config["Noise"]["f_std_si"]
+        self.t_std_si = env_config["Noise"]["t_std_si"]
+
+        self.dq_mean_si = env_config["Noise"]["dq_mean_si"]
+        self.dq_std_si = env_config["Noise"]["dq_std_si"]
+
+    ############################
+
+        self.n_actions = env_config["n_actions"]
+        self.action_rate = env_config["action_rate"] 
+        self.SEED = env_config["SEED"]
+
+        self.R1 = env_config["Reward"]["R1"]
+        self.R2 = env_config["Reward"]["R2"]
+        self.success_reward = env_config["Reward"]["success_reward"]
+
+        self.dx_max = env_config["dx_max"]
+
         self.offset = randomize.randomize_ur10_xml()
-        self.n_substeps = n_substeps
-        self.distance_threshold = distance_threshold
-        self.reward_type = reward_type
-        self.ctrl_type = ctrl_type
-        self.fail_threshold = fail_threshold
-        self.vary = vary
-        self.initial_qpos = initial_qpos
-        self.corrective = corrective
-        self.sim_ctrl_q = initial_qpos
         self.worker_id = worker_id
-        self.punish_force = punish_force
-        self.punish_force_thresh = punish_force_thresh
-        self.init_vary_range = init_vary_range
-        self.punish_force_factor = punish_force_factor
-        self.pos_std = pos_std
-        self.pos_drift_range = pos_drift_range
-        self.pos_drift_val = numpy.zeros(6,)   # set in sim reset function
 
-        self.ft_noise = ft_noise
-        self.ft_drift = ft_drift
-        self.ft_std = numpy.array([0.1, 0.1, 0.1, 0.003, 0.003, 0.003]) #These values are based on measurements
-        self.ft_drift_range = numpy.array([1, 1, 1, 0.015, 0.015, 0.015]) #and these ,too
-        self.ft_drift_val = 0    # set in sim reset function
+    ######################################## MONITORING 
 
+        self.episode = 0
+        self.results = list()
 
-        self.K = numpy.array([14.87, 13.26, 11.13, 10.49, 11.03, 11.47])
-        self.kp = numpy.array([4247, 3342, 3306, 707, 1236, 748])
-        self.ki = numpy.array([70.218, 38.65, 86.12, 19.60, 17.07, 19.40])
-        self.kd = numpy.array([0, 0, 0, 0, 0, 0])  # numpy.array([81.61, 77.38, 10.61, 10.44, 4.75, 9.14])
-        self.kf = numpy.array([28, 16.7, 8.42, 2.42, 4.12, 2.34])
-        self.max_fb = numpy.array([7.18, 1.54, 4.82, 3.22, 1.41, 1.891])
-
-        self.ctrl_buffer = np.repeat(initial_qpos.copy().reshape(1, 6), 4, axis=0)
-        b, a = butter(2, 0.12)
+    ########################################
+        self.K = numpy.array(env_config["controller"]["K"])
+        self.kp = numpy.array(env_config["controller"]["kp"])
+        self.ki = numpy.array(env_config["controller"]["ki"])
+        self.kd = numpy.array(env_config["controller"]["kd"])
+        self.kf = numpy.array(env_config["controller"]["kf"])
+        self.max_fb = numpy.array(env_config["controller"]["max_fb"])
+        self.ctrl_buffer = numpy.repeat(self.initial_qpos.copy().reshape(1, 6), 4, axis=0)
+        b, a = butter(env_config["controller"]["butter_0"], env_config["controller"]["butter_1"])
         self.a = a
         self.b = b
-        self.zi = [lfilter_zi(b, a) * initial_qpos[i] for i in range(6)]
-        self.qi_diff = 0
-        self.last_target_q = initial_qpos.copy()
+        self.zi = [lfilter_zi(b,a) * self.initial_qpos[i] for i in range(6)]
+        self.qi_diff = env_config["controller"]["qi_diff"]
+        self.last_target_q = self.initial_qpos.copy()
+        self.only_grav_comp = env_config["controller"]["only_grav_comp"]
+    #########################################
+        self.sim_ctrl_q = self.initial_qpos
+        
 
-        self.randomize_kwargs = randomize_kwargs
         super(Ur10Env, self).__init__(
-            model_path=model_path, n_substeps=n_substeps, n_actions=6,
-            initial_qpos=initial_qpos)
-        self.p = [900,
-             8000,
-             700,
-             100,
-             100,
-             100]
-        self.d = [12,
-             80,
-             5,
-             0.5,
-             0.5,
-             0.5, ]
-        self.max_T = np.array(
-            [40,
-             50,
-             35,
-             2,
-             2,
-             2])
-    # GoalEnv methods
-    # ----------------------------
+            model_path=self.model_path, n_substeps=self.n_substeps, n_actions=self.n_actions,
+            initial_qpos=self.initial_qpos, seed=self.SEED, success_reward=self.success_reward, action_rate=self.action_rate)
+        
 
 
     def set_force_for_q(self, q_ctrl, only_grav_comp=False):
@@ -156,6 +169,17 @@ class Ur10Env(marius_custom_env.RobotEnv):
         print('noise has been activated.')
 
     def compute_reward(self, obs, goal, info):
+        d = goal_distance(obs,goal)
+        f = numpy.absolute(obs[7])
+        + numpy.absolute(obs[8])
+        + numpy.absolute(obs[9])
+        rew = self.R1 * (-d) + self.R2 *(-f)
+        #if self.save_data:
+        #    self.rewards.append(rew)
+        #self.step_count += 1
+        return rew
+    '''
+    def compute_reward(self, obs, goal, info):
         # Compute distance between goal and the achieved goal.
         d = goal_distance(obs, goal)
         #print(d)
@@ -169,9 +193,8 @@ class Ur10Env(marius_custom_env.RobotEnv):
             force_amp = numpy.linalg.norm(obs[6:9])
             if self.punish_force and force_amp > self.punish_force_thresh:
                 rew -= self.punish_force_factor * force_amp
-
             return rew
-
+    '''
     # RobotEnv methods
     # ----------------------------
 
@@ -211,8 +234,8 @@ class Ur10Env(marius_custom_env.RobotEnv):
             #diff_now = numpy.array(x_now - self.init_x).reshape(7,)
             diff_then = numpy.array(x_then[:3] - self.init_x[:3])
 
-            barriers_min = numpy.array([-0.2, -0.2,   -0.2])
-            barriers_max = numpy.array([0.2,  0.4, 0.2])
+            barriers_min = numpy.array([-0.4, -0.8,   -0.4])
+            barriers_max = numpy.array([0.4,  0.8, 0.4])
 
             #for i in range(3):
             #    if (barriers_min[i] < diff_then[i] < barriers_max[i]):
@@ -241,6 +264,9 @@ class Ur10Env(marius_custom_env.RobotEnv):
             dx_ = np.concatenate([rot_mat.dot(dx[:3]), rot_mat.dot(dx[3:])])  ## transform to right coordinate system
             #dx_[2]+= 1
             dq = self.get_dq(dx_)
+
+            dq += numpy.random.normal(self.dq_mean_si, self.dq_std_si, 6)
+
             q = self.sim_ctrl_q + dq
             self.set_force_for_q(q)
 
@@ -260,20 +286,30 @@ class Ur10Env(marius_custom_env.RobotEnv):
         # positions
         rot_mat = self.sim.data.get_body_xmat('gripper_dummy_heg')
         ft = self.sim.data.sensordata.copy()
-        if self.ft_noise:
-            ft += numpy.random.randn(6,) * self.ft_std
-        if self.ft_drift:
-            ft += self.ft_drift_val
-        ft[1] -= 0.888*9.81  # nulling in initial position
+        #if self.ft_noise:
+        #    ft += numpy.random.randn(6,) * self.ft_std
+        #if self.ft_drift:
+        #    ft += self.ft_drift_val
+        ft[1] -= 0.588*9.81  # nulling in initial position
+
+        ft[:3] += numpy.random.normal(self.f_mean_si, self.f_std_si, 3)
+        ft[3:] += numpy.random.normal(self.t_mean_si, self.t_std_si, 3)
+        
         x_pos = self.sim.data.get_body_xpos("gripper_dummy_heg")
-        x_pos += numpy.random.uniform(-self.pos_std[:3], self.pos_std[:3])
-        x_pos += self.pos_drift_val[:3]
-        print(ft)
+        x_pos += numpy.random.normal(self.pos_mean_si, self.pos_std_si, 3)
+
+        #x_pos += numpy.random.uniform(-self.pos_std[:3], self.pos_std[:3])
+        #x_pos += self.pos_drift_val[:3]
+
         #x_quat = self.sim.data.get_body_xquat("gripper_dummy_heg")
+
         x_mat = self.sim.data.get_body_xmat("gripper_dummy_heg")
+
+        rpy_noise = numpy.random.normal(self.rot_mean_si, self.rot_std_si, 3) * (numpy.pi/180)
+
         rpy = normalize_rad(rotations.mat2euler(x_mat)
-                            + numpy.random.uniform(-self.pos_std[3:], self.pos_std[3:])
-                            + self.pos_drift_val[3:])
+                            + rpy_noise )
+                            #+ self.pos_drift_val[3:])
 
         obs = np.concatenate([
             rot_mat.dot(x_pos-self.goal[:3]), rot_mat.dot(normalize_rad(rpy-self.goal[3:])), ft.copy()
@@ -296,19 +332,32 @@ class Ur10Env(marius_custom_env.RobotEnv):
         a=0
 
     def _reset_sim(self):
+        
+        #########################
+        if self.episode > 0:
+            self.success_rate = float(numpy.sum(self.results)/float(len(self.results)))
+            print("Episode: {} Success Rate: {} ".format(self.episode, self.success_rate))
+            if len(self.results) < 10:
+                self.results.append(0)
+            else:
+                self.results.pop(0)
+        #########################
+
+        self.episode +=1
+
         if self.vary == True:
             deviation_x = numpy.random.uniform(-self.init_vary_range, self.init_vary_range)
             deviation_q = self.get_dq(deviation_x)
         else:
             deviation_q = numpy.array([0, 0, 0, 0, 0, 0])
 
-        if self.ft_drift:
-            self.ft_drift_val = numpy.random.uniform(-self.ft_drift_range, self.ft_drift_range)
-        self.pos_drift_val = numpy.random.uniform(-self.pos_drift_range, self.pos_drift_range)
+        #if self.ft_drift:
+        #    self.ft_drift_val = numpy.random.uniform(-self.ft_drift_range, self.ft_drift_range)
+        #self.pos_drift_val = numpy.random.uniform(-self.pos_drift_range, self.pos_drift_range)
 
         del self.sim
         self.offset = randomize.randomize_ur10_xml(worker_id=self.worker_id, **self.randomize_kwargs)
-        model = mujoco_py.load_model_from_path(self.xml_path)
+        model = mujoco_py.load_model_from_path(self.model_path)
         self.sim = mujoco_py.MjSim(model, nsubsteps=self.n_substeps)
         self.goal = self._sample_goal()
         if not self.viewer is None:
@@ -338,9 +387,7 @@ class Ur10Env(marius_custom_env.RobotEnv):
 
     def _sample_goal(self):
         home_path = os.getenv("HOME")
-        goal_path = os.path.join(*[
-            home_path, "DRL_AI4RoMoCo", "code", "environment", 
-            "experiment_configs", "goal_ur10_simpheg_conf2.json"])
+        goal_path = os.path.join(*[home_path, "DRL_AI4RoMoCo", "code", "environment", "experiment_configs", "goal_ur10_simpheg_conf2.json"])
 
         with open(goal_path, encoding='utf-8') as file:
             goal = json.load(file)
@@ -357,9 +404,20 @@ class Ur10Env(marius_custom_env.RobotEnv):
         obs = np.concatenate([
             rot_mat.dot(x_pos-self.goal[:3]), rot_mat.dot(normalize_rad(rpy-self.goal[3:]))
         ])
-
         d = goal_distance(obs, desired_goal)
-        return (d < self.distance_threshold).astype(np.float32)
+
+        if d < self.distance_threshold:
+            if len(self.results) == 0:
+                self.results.append(1)
+            else:
+                self.results.pop()
+                self.results.append(1)
+            self.success_flag = 1
+            return True
+        else:
+            return False 
+
+        #return (d < self.distance_threshold).astype(np.float32)
 
     def _is_failure(self, achieved_goal, desired_goal):
         d = goal_distance(achieved_goal, desired_goal)

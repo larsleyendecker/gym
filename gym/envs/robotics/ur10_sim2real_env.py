@@ -14,8 +14,8 @@ PROJECT_PATH = os.path.join(*[os.getenv("HOME"), "DRL_AI4RoMoCo"])
 SAVE_PATH = os.path.join(*[
     PROJECT_PATH, 
     "code", "data", 
-    "EVAL_TARGETSIM",
-    "NoisyVaryEnv_Actions"
+    "EVAL_SOURCESIM",
+    "StaticDynRewEnv"
     ])
 GOAL_PATH = os.path.join(*[
     PROJECT_PATH,
@@ -55,7 +55,9 @@ class Ur10Env(robot_custom_env.RobotEnv):
     ########################################## MONITORING
 
         self.episode = 0
+        self.reward_episodes = 0
         self.results = list()
+        self.stage = 0
 
         self.start_flag = True
         self.save_data = env_config["Saving"]
@@ -69,6 +71,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
             self.poses = []
 
     ##########################################
+
         self.model_path = model_xml_path
         self.n_substeps = env_config["n_substeps"]
         self.distance_threshold = env_config["Learning"]["distance_threshold"]
@@ -82,12 +85,18 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.action_rate = env_config["action_rate"] 
         self.SEED = env_config["SEED"]
 
-        self.R1 = env_config["Reward"]["R1"]
-        self.R2 = env_config["Reward"]["R2"]
+        self.R1_static = env_config["Reward"]["R1_static"]
+        self.R2_static = env_config["Reward"]["R2_static"]
         self.success_reward = env_config["Reward"]["success_reward"]
+        self.dynamic_reward = env_config["Reward"]["dynamic_reward"]
+        self.dynamic_reward_thresh = env_config["Reward"]["dynamic_reward_thresh"]
+        self.reward_episodes_thresh = env_config["Reward"]["reward_episodes_thresh"]
+        self.R2_max = env_config["Reward"]["R2_max"]
+        self.rew_function_params = numpy.array(env_config["Reward"]["rew_function_params"])
 
         self.dx_max = env_config["dx_max"]
         self.gripper_mass = env_config["gripper_mass"]
+        self.force_scaler = env_config["force_scaler"]
 
     ########################################## NOISE
 
@@ -142,6 +151,16 @@ class Ur10Env(robot_custom_env.RobotEnv):
 
     #########################################
 
+        if self.dynamic_reward:
+            self.compute_dynamic_reward_value()
+            print("Reward: Dynamic")
+        else:
+            self.R1 = self.R1_static
+            self.R2 = self.R2_static
+            print("Reward: Static")
+
+    ########################################
+
         super(Ur10Env, self).__init__(
             model_path=self.model_path, n_substeps=self.n_substeps, 
             n_actions=self.n_actions, initial_qpos=self.initial_qpos, 
@@ -175,21 +194,38 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.sim_ctrl_q = q_ctrl
         return self.sim.data.ctrl[:].copy()
 
-
-    def activate_noise(self):
-        self.vary=True
-        print('noise has been activated.')
-
     def compute_reward(self, obs, goal, info):
+
         d = goal_distance(obs,goal)
-        f = numpy.absolute(obs[7])
-        + numpy.absolute(obs[8])
-        + numpy.absolute(obs[9])
+
+        #f = numpy.absolute(obs[7])
+        #+ numpy.absolute(obs[8])
+        #+ numpy.absolute(obs[9])
+        f = numpy.absolute(self.raw_forces[0])
+        + numpy.absolute(self.raw_forces[1])
+        + numpy.absolute(self.raw_forces[2])
+
         rew = self.R1 * (-d) + self.R2 *(-f)
         if self.save_data:
             self.rewards.append(rew)
         self.step_count += 1
         return rew
+
+    def compute_dynamic_reward_value(self):
+
+        a = self.rew_function_params[0]
+        b = self.rew_function_params[1]
+        c = self.rew_function_params[2]
+
+        if self.stage == 0:
+            self.R1 = 1
+            self.R2 = 0.0
+        elif self.stage > 0 and self.stage <= 25:
+            self.R1 = 1
+            self.R2 = self.R2_max *(a*(numpy.exp(c*self.stage) - 1))/(1 + b*numpy.exp(c*self.stage))
+        else:
+            self.R1 = 1
+            self.R2 = self.R2_max
 
     def _step_callback(self):
         a = 0
@@ -273,15 +309,22 @@ class Ur10Env(robot_custom_env.RobotEnv):
         rot_mat = self.sim.data.get_body_xmat('gripper_dummy_heg')
         ft = self.sim.data.sensordata.copy()
 
+        ft[1] -= self.gripper_mass*9.81 
+
         if self.start_flag:
             ft = numpy.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
         self.start_flag = False
-    
-        ft += numpy.random.normal(0.0, self.ft_noise_std)   
-        ft += numpy.random.uniform(-self.ft_rand_uncor_bound, self.ft_rand_uncor_bound) 
-        ft += self.ft_rand_cor
 
-        ft[1] -= self.gripper_mass*9.81 
+        self.raw_forces = ft[:3].copy()
+
+        ft_noise = numpy.random.normal(0.0, self.ft_noise_std) \
+            + numpy.random.uniform(
+                -self.ft_rand_uncor_bound, 
+                self.ft_rand_uncor_bound) \
+            + self.ft_rand_cor
+
+        ft += self.force_scaler*ft_noise
+
         x_pos = self.sim.data.get_body_xpos("gripper_dummy_heg")
         x_pos += numpy.random.normal(0.0, self.pos_noise_std[:3])
         x_pos += numpy.random.uniform(
@@ -306,6 +349,10 @@ class Ur10Env(robot_custom_env.RobotEnv):
                 ft.copy()
         ])
 
+        #print("pos: ", obs[:3])
+        #print("rot: ", obs[3:6])
+        #print("force: ", obs[6:9])
+
         if self.save_data:
             self.fts.append([ft[0], ft[1], ft[2], ft[3], ft[4], ft[5],])
             self.obs.append(obs)
@@ -315,6 +362,9 @@ class Ur10Env(robot_custom_env.RobotEnv):
             self.poses.append(numpy.concatenate(
                 [x_pos-self.goal[:3],
                 normalize_rad(rpy-self.goal[3:])]))
+
+        #print(ft[:3])
+        #print(self.sim.data.qpos)
 
         self.last_obs = obs
         return obs
@@ -336,9 +386,14 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.start_flag = True
         if self.episode > 0:
             self.success_rate = float(numpy.sum(self.results)/float(len(self.results)))
-            print(" | Episode: {} | Success Rate: {} | ".format(
+            if self.dynamic_reward:
+                info = self.reward_change()
+            else:
+                info = ""
+            print(" | Episode: {} | Success Rate: {} | Force Reward: {} |".format(
                 self.episode, 
-                self.success_rate)
+                self.success_rate,
+                info)
                 )
         if len(self.results) < 10:
             self.results.append(0)
@@ -453,6 +508,7 @@ class Ur10Env(robot_custom_env.RobotEnv):
                 self.results.pop()
                 self.results.append(1)
             self.success_flag = 1
+            #print("Final qpos: ", self.sim.data.qpos)
             return True
         else:
             return False 
@@ -466,6 +522,17 @@ class Ur10Env(robot_custom_env.RobotEnv):
         self.set_state(initial_qpos)
         self.sim.forward()
 
-
     def render(self, mode='human', width=500, height=500):
         return super(Ur10Env, self).render(mode, width, height)
+
+    def reward_change(self):
+
+        if self.success_rate > self.dynamic_reward_thresh and self.reward_episodes > self.reward_episodes_thresh:
+            self.stage += 1
+            self.compute_dynamic_reward_value()
+            self.reward_episodes = 0
+            info = "Reward increased: {}".format(self.R2)
+        else:
+            self.reward_episodes += 1
+            info = "{}".format(self.R2)
+        return info

@@ -236,15 +236,16 @@ class Ur10Env(robot_custom_env.RobotEnv):
         rot_mat = self.sim.data.get_body_xmat('gripper_dummy_heg')
         ft = self.sim.data.sensordata.copy()
 
-        if self.start_flag:
-            ft = numpy.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-        self.start_flag = False
-
         ft += numpy.random.normal(0.0, self.ft_noise_std)   
         ft += numpy.random.uniform(-self.ft_rand_uncor_bound, self.ft_rand_uncor_bound) 
         ft += self.ft_rand_cor
 
         ft[1] -= self.gripper_mass*9.81
+
+        if self.start_flag:
+            ft = numpy.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        self.start_flag = False
+
         x_pos = self.sim.data.get_body_xpos("gripper_dummy_heg")
         x_pos += numpy.random.normal(0.0, self.pos_noise_std[:3])
         x_pos += numpy.random.uniform(
@@ -281,6 +282,8 @@ class Ur10Env(robot_custom_env.RobotEnv):
                 normalize_rad(rpy-self.goal[3:])]))
 
         self.last_obs = obs
+        #print(self.sim.data.qpos)
+        #print(ft[:3])
         return obs
 
     def _viewer_setup(self):
